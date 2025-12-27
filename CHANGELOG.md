@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.7.0
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.6.1...v1.7.0)
+
+### 🚀 Enhancements
+
+- AST-only output, filter same-file dupes, sort by occurrences ([53acc46](https://github.com/turf-sports/dslop/commit/53acc46))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.6.1
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.6.0...v1.6.1)
