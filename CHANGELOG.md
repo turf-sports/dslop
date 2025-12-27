@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.1
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.6.0...v1.6.1)
+
+### 🩹 Fixes
+
+- Suppress all logs when using --json output ([59e30f1](https://github.com/turf-sports/dslop/commit/59e30f1))
+- Compact JSON output (90K→4K lines) ([3e93895](https://github.com/turf-sports/dslop/commit/3e93895))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.6.0
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.5.2...v1.6.0)
