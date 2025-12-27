@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.5.2
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.5.1...v1.5.2)
+
+### 📖 Documentation
+
+- Update README with AST-based detection details ([2bdb4f4](https://github.com/turf-sports/dslop/commit/2bdb4f4))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.5.1
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.5.0...v1.5.1)
