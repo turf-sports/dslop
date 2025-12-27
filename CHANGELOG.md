@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.8.2
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.8.1...v1.8.2)
+
+### 🩹 Fixes
+
+- Proper types for AST nodes, gitignore cache file ([69ed729](https://github.com/turf-sports/dslop/commit/69ed729))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.8.1
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.8.0...v1.8.1)
