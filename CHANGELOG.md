@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.0
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.5.2...v1.6.0)
+
+### 🚀 Enhancements
+
+- Smarter defaults - auto-switch to full scan when no changes ([fb918a8](https://github.com/turf-sports/dslop/commit/fb918a8))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.5.2
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.5.1...v1.5.2)
