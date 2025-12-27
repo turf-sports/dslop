@@ -351,7 +351,34 @@ async function main() {
     }
 
     if (jsonOutput) {
-      console.log(JSON.stringify({ duplicates, ast: astDuplicates, declarations: declDuplicates }, null, 2));
+      // Compact JSON format - only essential info
+      const compactDuplicates = duplicates.slice(0, 100).map(d => ({
+        lines: d.lineCount,
+        occurrences: d.occurrences,
+        similarity: Math.round(d.similarity * 100),
+        preview: d.matches[0]?.content.split('\n').slice(0, 3).join('\n') || '',
+        locations: d.matches.slice(0, 10).map(m => `${m.filePath.replace(process.cwd() + '/', '')}:${m.startLine}`),
+      }));
+      const compactAST = astDuplicates.slice(0, 50).map(a => ({
+        type: a.type,
+        name: a.matches[0]?.name || 'unknown',
+        occurrences: a.matches.length,
+        locations: a.matches.map(m => ({
+          name: m.name,
+          file: m.filePath.replace(process.cwd() + '/', ''),
+          line: m.startLine,
+          exported: m.exported,
+        })),
+      }));
+      console.log(JSON.stringify({
+        summary: {
+          duplicateGroups: duplicates.length,
+          astGroups: astDuplicates.length,
+          declarationGroups: declDuplicates.length,
+        },
+        duplicates: compactDuplicates,
+        ast: compactAST,
+      }, null, 2));
     } else {
       if (astDuplicates.length > 0) {
         console.log(formatASTDuplicates(astDuplicates, targetPath));
