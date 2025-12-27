@@ -2,6 +2,7 @@ import { glob } from "glob";
 import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
 import { normalizeCode } from "./normalizer";
+import { extractDeclarations, type Declaration, type DeclarationType } from "./declarations";
 import {
   MAX_BLOCK_SIZE,
   BLOCK_SIZE_MULTIPLIER,
@@ -12,14 +13,19 @@ import {
 } from "./constants";
 
 export interface CodeBlock {
-  content: string; // Original content
-  normalized: string; // Normalized for comparison
-  hash: string; // Hash of normalized content
-  filePath: string; // Absolute file path
+  content: string;
+  normalized: string;
+  hash: string;
+  filePath: string;
   startLine: number;
   endLine: number;
   lineCount: number;
+  declarationType?: DeclarationType;
+  declarationName?: string;
+  exported?: boolean;
 }
+
+export type { Declaration, DeclarationType };
 
 export interface ScanOptions {
   extensions: string[];
@@ -30,6 +36,7 @@ export interface ScanOptions {
 
 export interface ScanResult {
   blocks: CodeBlock[];
+  declarations: Declaration[];
   fileCount: number;
   totalLines: number;
 }
@@ -75,10 +82,7 @@ function extractBlocks(
   }
 
   for (const blockSize of blockSizes) {
-    const step = Math.max(
-      1,
-      Math.floor(blockSize / SLIDING_WINDOW_STEP_DIVISOR)
-    );
+    const step = blockSize < 10 ? 1 : Math.max(1, Math.floor(blockSize / SLIDING_WINDOW_STEP_DIVISOR));
 
     for (let i = 0; i <= lines.length - blockSize; i += step) {
       const blockLines = lines.slice(i, i + blockSize);
@@ -127,12 +131,14 @@ function shouldIgnore(filePath: string, ignorePatterns: string[]): boolean {
 
 export async function scanDirectory(
   targetPath: string,
-  options: ScanOptions
+  options: ScanOptions,
+  enableDeclarations = true
 ): Promise<ScanResult> {
   const { extensions, ignorePatterns, minLines, normalize } = options;
 
   const absolutePath = path.resolve(targetPath);
   const blocks: CodeBlock[] = [];
+  const declarations: Declaration[] = [];
   let fileCount = 0;
   let totalLines = 0;
 
@@ -146,6 +152,8 @@ export async function scanDirectory(
     nodir: true,
     ignore: ignorePatterns.map(p => `**/${p}/**`),
   });
+
+  const isTypeScript = enableDeclarations && extensions.some(ext => ext === "ts" || ext === "tsx");
 
   for (const filePath of files) {
     if (shouldIgnore(filePath, ignorePatterns)) {
@@ -172,11 +180,15 @@ export async function scanDirectory(
         normalize
       );
       blocks.push(...fileBlocks);
+
+      if (isTypeScript && (filePath.endsWith(".ts") || filePath.endsWith(".tsx"))) {
+        const fileDeclarations = extractDeclarations(content, filePath);
+        declarations.push(...fileDeclarations);
+      }
     } catch {
-      // Skip files we can't read
       console.warn(`Warning: Could not read ${filePath}`);
     }
   }
 
-  return { blocks, fileCount, totalLines };
+  return { blocks, declarations, fileCount, totalLines };
 }

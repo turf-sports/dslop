@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { DuplicateGroup } from "./detector";
+import type { DuplicateGroup, DeclarationDuplicate } from "./detector";
 import {
   MAX_PATH_DISPLAY_LENGTH,
   MAX_MATCHES_IN_SUMMARY,
@@ -9,7 +9,7 @@ import {
   CODE_PREVIEW_CONTEXT_LINES,
 } from "./constants";
 
-const { reset, bold, dim, red, green, yellow, blue, cyan, magenta, gray } = COLORS;
+const { reset, bold, dim, red, green, yellow, cyan, magenta, gray } = COLORS;
 
 /**
  * Truncate a path for display
@@ -79,18 +79,19 @@ function formatGroup(group: DuplicateGroup, index: number, basePath: string): st
   }
 
   // Show a snippet of the code (first few lines)
-  if (group.matches.length > 0) {
+  const firstMatch = group.matches[0];
+  if (firstMatch) {
     lines.push("");
     lines.push(`  ${dim}Code preview:${reset}`);
     
-    const previewLines = group.matches[0].content
+    const previewLines = firstMatch.content
       .split("\n")
       .slice(0, CODE_PREVIEW_CONTEXT_LINES)
       .map((line) => `  ${gray}│${reset} ${dim}${line.slice(0, 80)}${line.length > 80 ? "..." : ""}${reset}`);
     
     lines.push(...previewLines);
     
-    if (group.matches[0].content.split("\n").length > CODE_PREVIEW_CONTEXT_LINES) {
+    if (firstMatch.content.split("\n").length > CODE_PREVIEW_CONTEXT_LINES) {
       lines.push(`  ${gray}│${reset} ${dim}...${reset}`);
     }
   }
@@ -131,8 +132,11 @@ export function formatOutput(groups: DuplicateGroup[], basePath: string): string
   const groupsToShow = groups.slice(0, MAX_GROUPS_DETAILED);
   
   for (let i = 0; i < groupsToShow.length; i++) {
-    lines.push(formatGroup(groupsToShow[i], i, basePath));
-    lines.push("");
+    const group = groupsToShow[i];
+    if (group) {
+      lines.push(formatGroup(group, i, basePath));
+      lines.push("");
+    }
   }
 
   if (groups.length > MAX_GROUPS_DETAILED) {
@@ -204,6 +208,96 @@ export function formatQuickList(groups: DuplicateGroup[], basePath: string): str
     
     lines.push(`[${badge}] ${group.lineCount}L × ${group.occurrences}: ${files}${more}`);
   }
+
+  return lines.join("\n");
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  type: "Type",
+  interface: "Interface", 
+  function: "Function",
+  class: "Class",
+  const: "Constant",
+  enum: "Enum",
+};
+
+function formatDeclarationGroup(group: DeclarationDuplicate, index: number, basePath: string): string {
+  const lines: string[] = [];
+  
+  const typeLabel = TYPE_LABELS[group.type] || group.type;
+  const simBadge = group.similarity >= 0.95 
+    ? `${red}${bold}EXACT${reset}` 
+    : `${yellow}${Math.round(group.similarity * 100)}%${reset}`;
+  
+  lines.push(`${bold}${typeLabel} ${index + 1}${reset} │ ${simBadge} │ ${group.matches.length} occurrences`);
+  
+  if (group.nameSimilarity > 0 && group.nameSimilarity < 1) {
+    lines.push(`  ${dim}Name similarity: ${Math.round(group.nameSimilarity * 100)}%${reset}`);
+  }
+  
+  lines.push("");
+
+  for (const match of group.matches.slice(0, 5)) {
+    const displayPath = truncatePath(match.filePath, basePath);
+    const exportBadge = match.exported ? `${green}exported${reset}` : `${gray}local${reset}`;
+    lines.push(`  ${dim}├─${reset} ${cyan}${match.name}${reset} [${exportBadge}]`);
+    lines.push(`     ${displayPath}:${yellow}${match.startLine}${reset}-${yellow}${match.endLine}${reset}`);
+  }
+
+  if (group.matches.length > 5) {
+    lines.push(`  ${dim}└─${reset} ${gray}... and ${group.matches.length - 5} more${reset}`);
+  }
+
+  lines.push("");
+  lines.push(`  ${magenta}→${reset} ${group.suggestion}`);
+
+  return lines.join("\n");
+}
+
+export function formatDeclarations(groups: DeclarationDuplicate[], basePath: string): string {
+  if (groups.length === 0) {
+    return "";
+  }
+
+  const lines: string[] = [];
+  
+  lines.push("");
+  lines.push(SECTION_SEPARATOR);
+  lines.push(`${bold}DUPLICATE DECLARATIONS${reset}`);
+  lines.push(SECTION_SEPARATOR);
+  lines.push("");
+
+  const byType = new Map<string, DeclarationDuplicate[]>();
+  for (const group of groups) {
+    const existing = byType.get(group.type) || [];
+    existing.push(group);
+    byType.set(group.type, existing);
+  }
+
+  let globalIndex = 0;
+  for (const [type, typeGroups] of byType) {
+    const typeLabel = TYPE_LABELS[type] || type;
+    lines.push(`${bold}${typeLabel}s (${typeGroups.length})${reset}`);
+    lines.push("");
+    
+    for (const group of typeGroups.slice(0, 10)) {
+      lines.push(formatDeclarationGroup(group, globalIndex++, basePath));
+      lines.push("");
+    }
+    
+    if (typeGroups.length > 10) {
+      lines.push(`${dim}... and ${typeGroups.length - 10} more ${typeLabel.toLowerCase()}s${reset}`);
+      lines.push("");
+    }
+  }
+
+  lines.push(SECTION_SEPARATOR);
+  
+  const totalDups = groups.reduce((sum, g) => sum + g.matches.length, 0);
+  lines.push(`${bold}Declaration Summary${reset}`);
+  lines.push(`  Duplicate groups: ${bold}${groups.length}${reset}`);
+  lines.push(`  Total occurrences: ${bold}${totalDups}${reset}`);
+  lines.push(SECTION_SEPARATOR);
 
   return lines.join("\n");
 }

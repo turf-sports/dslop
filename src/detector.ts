@@ -1,4 +1,5 @@
-import type { CodeBlock } from "./scanner";
+import type { CodeBlock, Declaration, DeclarationType } from "./scanner";
+import { calculateNameSimilarity } from "./declarations";
 import {
   SIZE_BUCKET_DIVISOR,
   MAX_SIMILARITY_SAMPLES,
@@ -12,6 +13,25 @@ export interface DuplicateMatch {
   startLine: number;
   endLine: number;
   content: string;
+  declarationType?: DeclarationType;
+  declarationName?: string;
+}
+
+export interface DeclarationDuplicate {
+  id: number;
+  type: DeclarationType;
+  similarity: number;
+  nameSimilarity: number;
+  contentSimilarity: number;
+  matches: Array<{
+    name: string;
+    filePath: string;
+    startLine: number;
+    endLine: number;
+    content: string;
+    exported: boolean;
+  }>;
+  suggestion: string;
 }
 
 export interface RefactoringSuggestion {
@@ -127,7 +147,7 @@ class UnionFind {
 export function findDuplicates(
   blocks: CodeBlock[],
   minSimilarity: number,
-  _basePath: string
+  basePath: string
 ): DuplicateGroup[] {
   // Group blocks by hash first for exact matches (fast)
   const hashGroups = new Map<string, CodeBlock[]>();
@@ -329,7 +349,7 @@ export function findDuplicates(
   // Add refactoring suggestions to each group
   return dedupedGroups.map(group => ({
     ...group,
-    suggestion: generateRefactoringSuggestion(group, _basePath),
+    suggestion: generateRefactoringSuggestion(group, basePath),
   }));
 }
 
@@ -636,4 +656,99 @@ function deduplicateGroups(groups: DuplicateGroup[]): DuplicateGroup[] {
   }
 
   return result;
+}
+
+export function findDeclarationDuplicates(
+  declarations: Declaration[],
+  minSimilarity: number
+): DeclarationDuplicate[] {
+  const duplicates: DeclarationDuplicate[] = [];
+  let groupId = 0;
+
+  const byType = new Map<DeclarationType, Declaration[]>();
+  for (const decl of declarations) {
+    const existing = byType.get(decl.type) ?? [];
+    existing.push(decl);
+    byType.set(decl.type, existing);
+  }
+
+  for (const [type, typeDecls] of byType) {
+    const processed = new Set<number>();
+
+    for (let i = 0; i < typeDecls.length; i++) {
+      if (processed.has(i)) continue;
+      
+      const declA = typeDecls[i]!;
+      const matches: DeclarationDuplicate["matches"] = [{
+        name: declA.name,
+        filePath: declA.filePath,
+        startLine: declA.startLine,
+        endLine: declA.endLine,
+        content: declA.content,
+        exported: declA.exported,
+      }];
+
+      let bestNameSim = 0;
+      let bestContentSim = 0;
+
+      for (let j = i + 1; j < typeDecls.length; j++) {
+        if (processed.has(j)) continue;
+        
+        const declB = typeDecls[j]!;
+        
+        if (declA.filePath === declB.filePath && 
+            Math.abs(declA.startLine - declB.startLine) < 5) continue;
+
+        const nameSim = calculateNameSimilarity(declA.name, declB.name);
+        const contentSim = calculateSimilarityFast(declA.normalized, declB.normalized);
+        
+        const combined = Math.max(
+          nameSim * 0.4 + contentSim * 0.6,
+          nameSim >= 0.9 ? nameSim : 0,
+          contentSim >= 0.9 ? contentSim : 0
+        );
+
+        if (combined >= minSimilarity || (nameSim >= 0.8 && contentSim >= 0.5)) {
+          processed.add(j);
+          matches.push({
+            name: declB.name,
+            filePath: declB.filePath,
+            startLine: declB.startLine,
+            endLine: declB.endLine,
+            content: declB.content,
+            exported: declB.exported,
+          });
+          bestNameSim = Math.max(bestNameSim, nameSim);
+          bestContentSim = Math.max(bestContentSim, contentSim);
+        }
+      }
+
+      if (matches.length >= 2) {
+        processed.add(i);
+        
+        const exported = matches.find(m => m.exported);
+        const suggestion = exported
+          ? `Import \`${exported.name}\` from \`${exported.filePath.replace(/.*\/(src|lib)\//, "")}\``
+          : `Consider extracting \`${declA.name}\` to a shared location`;
+
+        duplicates.push({
+          id: groupId++,
+          type,
+          similarity: Math.max(bestNameSim, bestContentSim),
+          nameSimilarity: bestNameSim,
+          contentSimilarity: bestContentSim,
+          matches,
+          suggestion,
+        });
+      }
+    }
+  }
+
+  duplicates.sort((a, b) => {
+    const scoreA = a.matches.length * a.similarity;
+    const scoreB = b.matches.length * b.similarity;
+    return scoreB - scoreA;
+  });
+
+  return duplicates;
 }
