@@ -1,6 +1,6 @@
 {
   "name": "dslop",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "Detect Similar/Duplicate Lines Of Programming - Find code duplication in your codebase",
   "type": "module",
   "main": "./dist/index.cjs",
