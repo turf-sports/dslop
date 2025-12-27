@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.4.0
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.3.1...v1.4.0)
+
+### 🚀 Enhancements
+
+- Improve duplicate detection accuracy for small blocks ([b009d47](https://github.com/turf-sports/dslop/commit/b009d47))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.3.1
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.3.0...v1.3.1)
