@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3.1
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.3.0...v1.3.1)
+
+### 🏡 Chore
+
+- Remove verbose comments ([1fa02d6](https://github.com/turf-sports/dslop/commit/1fa02d6))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.3.0
 
 
