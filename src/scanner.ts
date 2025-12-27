@@ -5,6 +5,7 @@ import { extractASTBlocks, type ASTBlock } from "./ast";
 import { ASTCache } from "./cache";
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+const PARALLEL_BATCH_SIZE = 50; // Process files in parallel batches
 
 export type { ASTBlock };
 
@@ -33,6 +34,42 @@ function shouldIgnore(filePath: string, ignorePatterns: string[]): boolean {
   });
 }
 
+interface FileResult {
+  blocks: ASTBlock[];
+  lineCount: number;
+}
+
+async function processFile(
+  filePath: string,
+  cache: ASTCache | null
+): Promise<FileResult | null> {
+  try {
+    const fileStat = await stat(filePath);
+    
+    if (fileStat.size > MAX_FILE_SIZE) {
+      return null;
+    }
+
+    // Try cache first (synchronous check with pre-fetched stat)
+    const cached = cache?.get(filePath, fileStat.mtimeMs, fileStat.size);
+    if (cached) {
+      return cached;
+    }
+
+    // Cache miss - read and parse file
+    const content = await readFile(filePath, "utf-8");
+    const lineCount = content.split("\n").length;
+    const blocks = extractASTBlocks(content, filePath);
+    
+    // Update cache
+    cache?.set(filePath, blocks, lineCount, fileStat.mtimeMs, fileStat.size);
+    
+    return { blocks, lineCount };
+  } catch {
+    return null;
+  }
+}
+
 export async function scanDirectory(
   targetPath: string,
   options: ScanOptions,
@@ -55,58 +92,33 @@ export async function scanDirectory(
     ? `**/*.${extensions[0]}` 
     : `**/*.{${extensions.join(",")}}`;
 
-  const files = await glob(pattern, {
+  const allFiles = await glob(pattern, {
     cwd: absolutePath,
     absolute: true,
     nodir: true,
     ignore: ignorePatterns.map(p => `**/${p}/**`),
   });
 
-  for (const filePath of files) {
-    if (shouldIgnore(filePath, ignorePatterns)) {
-      continue;
-    }
+  // Filter to valid files
+  const files = allFiles.filter(filePath => {
+    if (shouldIgnore(filePath, ignorePatterns)) return false;
+    const ext = path.extname(filePath);
+    return ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx";
+  });
 
-    // Only process TypeScript/JavaScript files for AST
-    if (!filePath.endsWith(".ts") && !filePath.endsWith(".tsx") && 
-        !filePath.endsWith(".js") && !filePath.endsWith(".jsx")) {
-      continue;
-    }
-
-    try {
-      const fileStat = await stat(filePath);
-
-      if (fileStat.size > MAX_FILE_SIZE) {
-        continue;
-      }
-
-      // Try cache first
-      const cachedAST = cache ? await cache.get(filePath) : null;
-
-      if (cachedAST) {
-        // Cache hit
-        astBlocks.push(...cachedAST);
-        
-        // Still need to count lines
-        const content = await readFile(filePath, "utf-8");
-        totalLines += content.split("\n").length;
+  // Process files in parallel batches
+  for (let i = 0; i < files.length; i += PARALLEL_BATCH_SIZE) {
+    const batch = files.slice(i, i + PARALLEL_BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(filePath => processFile(filePath, cache))
+    );
+    
+    for (const result of results) {
+      if (result) {
+        astBlocks.push(...result.blocks);
+        totalLines += result.lineCount;
         fileCount++;
-      } else {
-        // Cache miss - parse file
-        const content = await readFile(filePath, "utf-8");
-        totalLines += content.split("\n").length;
-        fileCount++;
-
-        const fileAST = extractASTBlocks(content, filePath);
-        astBlocks.push(...fileAST);
-        
-        // Cache the result
-        if (cache) {
-          await cache.set(filePath, fileAST);
-        }
       }
-    } catch {
-      // Skip files that can't be read
     }
   }
 
