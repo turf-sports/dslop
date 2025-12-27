@@ -326,20 +326,13 @@ async function main() {
       declDuplicates = filterCrossPackage(declDuplicates);
     }
 
-    const totalGroups = duplicates.length + astDuplicates.length + declDuplicates.length;
-    
     if (!jsonOutput) {
-      console.log(`Found ${totalGroups} duplicate groups in ${Math.round(detectTime)}ms`);
-      if (astDuplicates.length > 0 || declDuplicates.length > 0) {
-        console.log(`  (${duplicates.length} blocks, ${astDuplicates.length} AST, ${declDuplicates.length} declarations)\n`);
-      } else {
-        console.log();
-      }
+      console.log(`Found ${astDuplicates.length} duplicate functions/types in ${Math.round(detectTime)}ms\n`);
     }
 
-    if (totalGroups === 0) {
+    if (astDuplicates.length === 0) {
       if (jsonOutput) {
-        console.log(JSON.stringify({ duplicates: [], ast: [], declarations: [] }, null, 2));
+        console.log(JSON.stringify({ summary: { duplicateGroups: 0 }, duplicates: [] }, null, 2));
       } else if (!scanAll) {
         console.log("No duplicates in your changes. You're good!");
       } else if (crossPackage) {
@@ -351,14 +344,7 @@ async function main() {
     }
 
     if (jsonOutput) {
-      // Compact JSON format - only essential info
-      const compactDuplicates = duplicates.slice(0, 100).map(d => ({
-        lines: d.lineCount,
-        occurrences: d.occurrences,
-        similarity: Math.round(d.similarity * 100),
-        preview: d.matches[0]?.content.split('\n').slice(0, 3).join('\n') || '',
-        locations: d.matches.slice(0, 10).map(m => `${m.filePath.replace(process.cwd() + '/', '')}:${m.startLine}`),
-      }));
+      // Compact JSON format - only AST results (the useful ones)
       const compactAST = astDuplicates.slice(0, 50).map(a => ({
         type: a.type,
         name: a.matches[0]?.name || 'unknown',
@@ -372,23 +358,15 @@ async function main() {
       }));
       console.log(JSON.stringify({
         summary: {
-          duplicateGroups: duplicates.length,
-          astGroups: astDuplicates.length,
-          declarationGroups: declDuplicates.length,
+          duplicateGroups: astDuplicates.length,
         },
-        duplicates: compactDuplicates,
-        ast: compactAST,
+        duplicates: compactAST,
       }, null, 2));
     } else {
       if (astDuplicates.length > 0) {
         console.log(formatASTDuplicates(astDuplicates, targetPath));
-      }
-      if (duplicates.length > 0) {
-        console.log(formatOutput(duplicates, targetPath));
-        console.log(formatStats(duplicates));
-      }
-      if (declDuplicates.length > 0) {
-        console.log(formatDeclarations(declDuplicates, targetPath));
+      } else {
+        console.log("No duplicate functions or types found!");
       }
     }
   } catch (error) {

@@ -410,7 +410,13 @@ export function findASTDuplicates(blocks: ASTBlock[], _minSimilarity: number): A
   // Sort by impact (more matches = higher priority)
   groups.sort((a, b) => b.matches.length - a.matches.length);
 
-  return groups;
+  // Filter out same-file duplicates (only keep cross-file duplicates)
+  const crossFileGroups = groups.filter(group => {
+    const uniqueFiles = new Set(group.matches.map(m => m.filePath));
+    return uniqueFiles.size > 1;
+  });
+
+  return crossFileGroups;
 }
 
 export interface ASTDuplicateGroup {

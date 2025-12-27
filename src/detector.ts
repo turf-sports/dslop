@@ -335,19 +335,26 @@ export function findDuplicates(
   // Filter groups that don't meet the similarity threshold
   const filteredSimilar = similarDuplicates.filter(g => g.similarity >= minSimilarity);
   
-  // Combine and sort by impact (occurrences * lines)
+  // Combine and sort by occurrences (most duplicated first), then by lines as tiebreaker
   const allDuplicates = [...exactDuplicates, ...filteredSimilar];
   allDuplicates.sort((a, b) => {
-    const impactA = a.occurrences * a.lineCount;
-    const impactB = b.occurrences * b.lineCount;
-    return impactB - impactA;
+    if (b.occurrences !== a.occurrences) {
+      return b.occurrences - a.occurrences;
+    }
+    return b.lineCount - a.lineCount;
   });
 
   // Deduplicate groups that have significant overlap
   const dedupedGroups = deduplicateGroups(allDuplicates);
   
+  // Filter out same-file duplicates (only keep cross-file duplicates)
+  const crossFileGroups = dedupedGroups.filter(group => {
+    const uniqueFiles = new Set(group.matches.map(m => m.filePath));
+    return uniqueFiles.size > 1;
+  });
+  
   // Add refactoring suggestions to each group
-  return dedupedGroups.map(group => ({
+  return crossFileGroups.map(group => ({
     ...group,
     suggestion: generateRefactoringSuggestion(group, basePath),
   }));

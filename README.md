@@ -1,12 +1,92 @@
 # dslop
 
-Find duplicate code in your codebase.
+Find duplicate functions, types, and code in your codebase using AST analysis.
 
 ```bash
 npx dslop
 ```
 
-By default, checks your branch changes against the codebase. If no changes found, automatically does a full scan.
+## What it finds
+
+**Real duplicates, not noise.** dslop uses AST parsing to find semantically identical code - functions with the same logic but different variable names, types defined in multiple places, copy-pasted utilities.
+
+```bash
+$ dslop --all --json
+
+{
+  "summary": { "duplicateGroups": 101 },
+  "duplicates": [
+    {
+      "type": "function",
+      "name": "loadEnv",
+      "occurrences": 6,
+      "locations": [
+        { "name": "loadEnv", "file": "scripts/migrate.ts", "line": 8 },
+        { "name": "loadEnv", "file": "scripts/seed.ts", "line": 12 },
+        { "name": "loadEnv", "file": "lib/db/migrate.ts", "line": 7 },
+        { "name": "loadEnv", "file": "lib/db/check-state.ts", "line": 9 }
+      ]
+    },
+    {
+      "type": "interface",
+      "name": "Params",
+      "occurrences": 6,
+      "locations": [
+        { "name": "Params", "file": "app/api/games/[id]/route.ts", "line": 5 },
+        { "name": "Params", "file": "app/api/games/[id]/state/route.ts", "line": 8 },
+        { "name": "Params", "file": "app/api/games/[id]/details/route.ts", "line": 12 }
+      ]
+    },
+    {
+      "type": "type",
+      "name": "LeaderboardPlayer",
+      "occurrences": 3,
+      "locations": [
+        { "name": "LeaderboardPlayer", "file": "packages/types/leaderboard.ts", "line": 45, "exported": true },
+        { "name": "LeaderboardPlayer", "file": "apps/mobile/types.ts", "line": 52, "exported": false },
+        { "name": "LeaderboardPlayer", "file": "apps/web/lib/types.ts", "line": 30, "exported": false }
+      ]
+    }
+  ]
+}
+```
+
+### Monorepo cross-package duplicates
+
+Find types and functions duplicated across packages:
+
+```bash
+$ dslop --all --cross-package
+
+Found 48 duplicate functions/types
+
+# Types duplicated between packages/types and apps/
+PrizeDistribution    packages/types/game.ts ↔ packages/db/schema/game.ts
+DevicePlatform       apps/web/lib/notifications.ts ↔ apps/listener/lib/notifications.ts
+TeamColors           apps/mobile/store/types.ts ↔ apps/web/lib/types/colors.ts
+
+# Functions copy-pasted between apps/
+subscribeToChannel   apps/web/lib/subscriptions.ts ↔ apps/listener/lib/subscriptions.ts
+getTeamLogoUrl       packages/shared/logos.ts → also in apps/web (3 copies)
+normalizeError       apps/web/sentry.config.ts ↔ apps/listener/lib/sentry.ts
+```
+
+### PR review mode
+
+By default, dslop checks your branch changes against the existing codebase:
+
+```bash
+$ dslop
+
+Scanning...
+  Mode: checking changed lines in 3 files
+
+Found 2 duplicate functions/types
+
+# You're adding code that already exists elsewhere:
+getUserDisplayName   your change: app/profile/page.tsx:19
+                     exists in: components/sidebar.tsx:50
+```
 
 ## Install
 
@@ -18,9 +98,10 @@ npm i -g dslop
 
 ```bash
 dslop                        # check PR changes (or full scan if none)
-dslop ./apps/web             # scan apps/web (full if no changes there)
-dslop -c                     # changes only, exit if none found
-dslop --cross-package        # cross-package dupes (monorepos)
+dslop --all                  # full codebase scan
+dslop --all --json           # JSON output for tooling
+dslop --cross-package        # only cross-package dupes (monorepos)
+dslop ./apps/web             # scan specific directory
 ```
 
 ## Options
@@ -32,47 +113,47 @@ dslop --cross-package        # cross-package dupes (monorepos)
 | `-m, --min-lines` | min lines per block (default: 4) |
 | `-s, --similarity` | similarity threshold 0-100 (default: 70) |
 | `-e, --extensions` | file extensions (default: ts,tsx,js,jsx) |
-| `--cross-package` | only show dupes across packages |
-| `--json` | json output |
+| `--cross-package` | only show dupes across packages/apps |
+| `--json` | JSON output |
 
 ## How it works
 
-dslop uses two detection methods in parallel:
+dslop parses TypeScript/JavaScript with Babel and extracts functions, classes, types, and interfaces. It normalizes the AST by replacing all identifiers with generic placeholders (`$0`, `$1`, etc.), preserving only the code structure.
 
-### 1. AST-based detection (functions/classes)
-
-Parses TypeScript/JavaScript with Babel to extract functions and classes. Normalizes the AST by replacing all identifiers with generic placeholders (`$0`, `$1`, etc.), preserving only the code structure.
-
-**This catches:**
+This catches:
 - Functions with identical logic but different variable names
-- Renamed copies of existing functions
-- Structurally identical classes
+- Types/interfaces defined in multiple places
+- Copy-pasted utilities across packages
 
-Example: `calculateSum(numbers)` and `computeTotal(items)` with the same loop structure will match.
+Example: these two functions are detected as duplicates:
 
-### 2. Text-based detection (code blocks)
+```ts
+// apps/web/utils.ts
+function getUserInitials(user: User): string {
+  const first = user.firstName?.[0] ?? '';
+  const last = user.lastName?.[0] ?? '';
+  return (first + last).toUpperCase();
+}
 
-Sliding window over source files extracts overlapping blocks at sizes 4, 6, 9, 13... lines. Before hashing, code is normalized:
-- String literals → `"<STRING>"`
-- Numbers → `<NUMBER>`
-- Whitespace collapsed
-- Comments preserved (intentional - comments often indicate copy-paste)
+// apps/admin/helpers.ts  
+function getInitials(person: Person): string {
+  const f = person.firstName?.[0] ?? '';
+  const l = person.lastName?.[0] ?? '';
+  return (f + l).toUpperCase();
+}
+```
 
-Exact hash matches = exact duplicates. For similar (non-exact) matches, uses character-level similarity.
+### What it ignores
 
-### Smart defaults
-
-1. If you have branch changes → checks those against the codebase
-2. If no changes found → automatically scans the entire target path
-3. Use `-c` to force changes-only mode (useful in CI)
+- Same-file duplicates (patterns within a single file)
+- Tiny functions (configurable via `--min-lines`)
+- Common patterns from UI libraries (shadcn components, etc.)
 
 ## Limitations
 
-- **TypeScript/JavaScript only for AST:** AST parsing uses Babel with TS/JSX plugins. Other languages fall back to text-based only.
-- **No cross-language:** Won't detect a Python function duplicated in TypeScript.
-- **Comments affect text matching:** Intentional tradeoff. Copy-pasted code often includes comments.
-- **Minimum 4 lines:** Shorter duplicates ignored to reduce noise. Use `-m 2` for stricter.
-- **Memory:** Loads all blocks in memory. Very large codebases (>1M lines) may be slow.
+- **TypeScript/JavaScript only:** AST parsing uses Babel with TS/JSX plugins
+- **No cross-language:** Won't detect duplication across languages
+- **Memory:** Loads all AST nodes in memory. Very large codebases (>1M lines) may be slow
 
 ## License
 
