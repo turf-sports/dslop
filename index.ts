@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import { findASTDuplicates } from "./src/ast";
 import { formatASTDuplicates } from "./src/formatter";
 import { scanDirectory, type ScanOptions } from "./src/scanner";
+import { showFirstRunNotice, trackCliStarted, trackCommandCompleted } from "./src/telemetry";
 
 const VERSION = process.env.npm_package_version || "__INJECT_VERSION__";
 
@@ -132,6 +133,12 @@ Examples:
 }
 
 async function main() {
+  const startTime = performance.now();
+
+  // Show first-run telemetry notice and track CLI start
+  await showFirstRunNotice();
+  trackCliStarted(VERSION);
+
   const { values, positionals } = parseArgs({
     args: process.argv.slice(2),
     options: {
@@ -150,11 +157,21 @@ async function main() {
 
   if (values.help) {
     showHelp();
+    trackCommandCompleted(VERSION, {
+      success: true,
+      duration_ms: Math.round(performance.now() - startTime),
+      mode: "full",
+    });
     process.exit(0);
   }
 
   if (values.version) {
     console.log(`dslop v${VERSION}`);
+    trackCommandCompleted(VERSION, {
+      success: true,
+      duration_ms: Math.round(performance.now() - startTime),
+      mode: "full",
+    });
     process.exit(0);
   }
 
@@ -179,6 +196,13 @@ async function main() {
     if (changedLines.size === 0) {
       if (forceChanges) {
         console.log("\nNo changes found.");
+        trackCommandCompleted(VERSION, {
+          success: true,
+          duration_ms: Math.round(performance.now() - startTime),
+          mode: "changes",
+          file_count: 0,
+          duplicate_count: 0,
+        });
         process.exit(0);
       }
       scanAll = true;
@@ -196,9 +220,9 @@ async function main() {
   }
 
   try {
-    const startTime = performance.now();
+    const scanStartTime = performance.now();
     const { astBlocks, fileCount, totalLines, cacheStats } = await scanDirectory(targetPath, scanOptions, useCache);
-    const scanTime = performance.now() - startTime;
+    const scanTime = performance.now() - scanStartTime;
 
     if (!jsonOutput) {
       console.log(`Scanned ${fileCount} files (${totalLines.toLocaleString()} lines) in ${Math.round(scanTime)}ms`);
@@ -214,6 +238,14 @@ async function main() {
       } else {
         console.log("No code found to analyze.");
       }
+      trackCommandCompleted(VERSION, {
+        success: true,
+        duration_ms: Math.round(performance.now() - startTime),
+        mode: scanAll ? "full" : "changes",
+        file_count: fileCount,
+        duplicate_count: 0,
+        flags: { cross_package: crossPackage, json_output: jsonOutput, no_cache: !useCache },
+      });
       process.exit(0);
     }
 
@@ -257,6 +289,14 @@ async function main() {
       } else {
         console.log(crossPackage ? "No cross-package duplicates found!" : "No duplicates found!");
       }
+      trackCommandCompleted(VERSION, {
+        success: true,
+        duration_ms: Math.round(performance.now() - startTime),
+        mode: scanAll ? "full" : "changes",
+        file_count: fileCount,
+        duplicate_count: 0,
+        flags: { cross_package: crossPackage, json_output: jsonOutput, no_cache: !useCache },
+      });
       process.exit(0);
     }
 
@@ -279,7 +319,22 @@ async function main() {
     } else {
       console.log(formatASTDuplicates(duplicates, targetPath));
     }
+
+    trackCommandCompleted(VERSION, {
+      success: true,
+      duration_ms: Math.round(performance.now() - startTime),
+      mode: scanAll ? "full" : "changes",
+      file_count: fileCount,
+      duplicate_count: duplicates.length,
+      flags: { cross_package: crossPackage, json_output: jsonOutput, no_cache: !useCache },
+    });
   } catch (error) {
+    trackCommandCompleted(VERSION, {
+      success: false,
+      duration_ms: Math.round(performance.now() - startTime),
+      mode: "full",
+      error: error instanceof Error ? error.message : String(error),
+    });
     console.error("Error:", error instanceof Error ? error.message : error);
     process.exit(1);
   }
