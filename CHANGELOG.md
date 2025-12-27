@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.3.0
+
+
+### 🚀 Enhancements
+
+- Include committed branch changes in default scan ([468c514](https://github.com/turf-sports/dslop/commit/468c514))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.2.0
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.1.0...v1.2.0)
