@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.7.1
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.7.0...v1.7.1)
+
+### 🔥 Performance
+
+- 28x faster with caching, remove text-based detection ([b93742c](https://github.com/turf-sports/dslop/commit/b93742c))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.7.0
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.6.1...v1.7.0)
