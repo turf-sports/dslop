@@ -16,6 +16,7 @@ npm i -g dslop
 
 ```bash
 dslop .                      # scan current directory
+dslop --staged               # check uncommitted changes for dupes
 dslop ./src -m 6 -s 80       # 6 line min, 80% similarity  
 dslop . --cross-package      # only cross-package dupes (monorepos)
 dslop . --json               # json output
@@ -28,6 +29,7 @@ dslop . --json               # json output
 | `-m, --min-lines` | 4 | min lines per block |
 | `-s, --similarity` | 70 | similarity threshold (0-100) |
 | `-e, --extensions` | ts,tsx,js,jsx | file extensions |
+| `--staged` | | only show dupes involving uncommitted changes |
 | `--cross-package` | | only show dupes across packages |
 | `--json` | | json output |
 

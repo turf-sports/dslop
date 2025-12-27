@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 
 import { parseArgs } from "node:util";
+import { execSync } from "node:child_process";
+import path from "node:path";
 import {
   DEFAULT_MIN_LINES,
   DEFAULT_SIMILARITY,
@@ -12,6 +14,25 @@ import { formatOutput, formatStats } from "./src/formatter";
 import { scanDirectory, type ScanOptions } from "./src/scanner";
 
 const VERSION = process.env.npm_package_version || "__INJECT_VERSION__";
+
+function getChangedFiles(targetPath: string): Set<string> {
+  const absolutePath = path.resolve(targetPath);
+  try {
+    const staged = execSync("git diff --cached --name-only", { cwd: absolutePath, encoding: "utf-8" });
+    const unstaged = execSync("git diff --name-only", { cwd: absolutePath, encoding: "utf-8" });
+    const untracked = execSync("git ls-files --others --exclude-standard", { cwd: absolutePath, encoding: "utf-8" });
+    
+    const files = new Set<string>();
+    for (const file of [...staged.split("\n"), ...unstaged.split("\n"), ...untracked.split("\n")]) {
+      if (file.trim()) {
+        files.add(path.resolve(absolutePath, file.trim()));
+      }
+    }
+    return files;
+  } catch {
+    return new Set();
+  }
+}
 
 function showHelp() {
   console.log(`
@@ -28,6 +49,7 @@ Options:
   -s, --similarity <n>  Minimum similarity threshold 0-100 (default: ${Math.round(DEFAULT_SIMILARITY * 100)})
   -e, --extensions <s>  File extensions to scan (default: ${DEFAULT_EXTENSIONS.join(",")})
   -i, --ignore <s>      Patterns to ignore (default: ${DEFAULT_IGNORE_PATTERNS.slice(0, 4).join(",")},...)
+  --staged              Only show duplicates involving uncommitted changes
   --no-normalize        Disable string/number normalization
   --cross-package       Only show duplicates across different packages/apps (monorepo mode)
   --json                Output as JSON
@@ -36,8 +58,8 @@ Options:
 
 Examples:
   dslop .                          Scan current directory
+  dslop --staged                   Check uncommitted changes for duplicates
   dslop ./src -m 6 -s 80           Scan src with 6 line min, 80% similarity
-  dslop . -e ts,tsx --json         Scan TypeScript files, output JSON
   dslop . --cross-package          Only duplicates across packages (great for monorepos)
 `);
 }
@@ -56,6 +78,7 @@ async function main() {
       ignore: { type: "string", short: "i", default: DEFAULT_IGNORE_PATTERNS.join(",") },
       normalize: { type: "boolean", default: true },
       "no-normalize": { type: "boolean", default: false },
+      staged: { type: "boolean", default: false },
       "cross-package": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -80,6 +103,7 @@ async function main() {
   const extensions = (values.extensions as string).split(",").map((e) => e.trim());
   const ignorePatterns = (values.ignore as string).split(",").map((p) => p.trim());
   const normalize = !values["no-normalize"];
+  const staged = values.staged as boolean;
   const crossPackage = values["cross-package"] as boolean;
   const jsonOutput = values.json as boolean;
 
@@ -99,13 +123,23 @@ async function main() {
     normalize,
   };
 
+  const changedFiles = staged ? getChangedFiles(targetPath) : null;
+  
+  if (staged && changedFiles?.size === 0) {
+    console.log("\nNo uncommitted changes found.");
+    process.exit(0);
+  }
+
   console.log(`\nScanning ${targetPath}...`);
   console.log(`  Extensions: ${extensions.join(", ")}`);
   console.log(`  Min block size: ${minLines} lines`);
   console.log(`  Similarity threshold: ${Math.round(similarity * 100)}%`);
   console.log(`  Normalization: ${normalize ? "enabled" : "disabled"}`);
+  if (staged) {
+    console.log(`  Staged mode: checking ${changedFiles!.size} changed files against codebase`);
+  }
   if (crossPackage) {
-    console.log(`  Cross-package mode: enabled (only showing duplicates across different packages/apps)`);
+    console.log(`  Cross-package mode: enabled`);
   }
   console.log();
 
@@ -126,6 +160,12 @@ async function main() {
     let duplicates = findDuplicates(blocks, similarity, targetPath);
     const detectTime = performance.now() - detectStart;
 
+    if (staged && changedFiles) {
+      duplicates = duplicates.filter((group) => 
+        group.matches.some((m) => changedFiles.has(m.filePath))
+      );
+    }
+
     if (crossPackage) {
       duplicates = duplicates.filter((group) => {
         const packages = new Set(
@@ -141,9 +181,13 @@ async function main() {
     console.log(`Found ${duplicates.length} duplicate groups in ${Math.round(detectTime)}ms\n`);
 
     if (duplicates.length === 0) {
-      console.log(crossPackage 
-        ? "No cross-package duplicates found!" 
-        : "No duplicates found!");
+      if (staged) {
+        console.log("No duplicates in your changes. You're good!");
+      } else if (crossPackage) {
+        console.log("No cross-package duplicates found!");
+      } else {
+        console.log("No duplicates found!");
+      }
       process.exit(0);
     }
 
