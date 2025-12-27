@@ -1,4 +1,37 @@
 import { parseSync } from "oxc-parser";
+import type {
+  Program,
+  Statement,
+  Expression,
+  FunctionDeclaration,
+  VariableDeclaration,
+  VariableDeclarator,
+  Class,
+  ArrowFunctionExpression,
+  FunctionExpression,
+  BlockStatement,
+  ReturnStatement,
+  IfStatement,
+  ForStatement,
+  CallExpression,
+  MemberExpression,
+  BinaryExpression,
+  LogicalExpression,
+  UnaryExpression,
+  ConditionalExpression,
+  AssignmentExpression,
+  ObjectExpression,
+  ObjectProperty,
+  ArrayExpression,
+  SpreadElement,
+  AwaitExpression,
+  ExpressionStatement,
+  TSInterfaceDeclaration,
+  TSTypeAliasDeclaration,
+  ExportNamedDeclaration,
+  ExportDefaultDeclaration,
+  BindingIdentifier,
+} from "@oxc-project/types";
 
 export interface ASTBlock {
   type: "function" | "class" | "type" | "interface" | "arrow";
@@ -12,6 +45,8 @@ export interface ASTBlock {
   exported: boolean;
 }
 
+type ASTNode = Statement | Expression | VariableDeclarator | ObjectProperty | SpreadElement | null;
+
 function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -21,136 +56,164 @@ function simpleHash(str: string): string {
   return hash.toString(36);
 }
 
-// Simple AST normalizer - replaces identifiers with placeholders
-function normalizeAST(node: any, idMap: Map<string, string>, counter: { val: number }): string {
+const PRESERVED_IDENTIFIERS = new Set([
+  "undefined", "null", "true", "false", "console", "Math", "Date", "Array", 
+  "Object", "String", "Number", "Boolean", "Promise", "Map", "Set",
+  "React", "useState", "useEffect", "useCallback", "useMemo", "useRef",
+]);
+
+function normalizeAST(node: ASTNode, idMap: Map<string, string>, counter: { val: number }): string {
   if (!node) return "";
   
-  const preserved = new Set([
-    "undefined", "null", "true", "false", "console", "Math", "Date", "Array", 
-    "Object", "String", "Number", "Boolean", "Promise", "Map", "Set",
-    "React", "useState", "useEffect", "useCallback", "useMemo", "useRef",
-  ]);
+  const type = node.type;
 
-  if (node.type === "Identifier") {
-    const name = node.name;
-    if (preserved.has(name)) return name;
+  // Identifiers
+  if (type === "Identifier") {
+    const name = (node as { name: string }).name;
+    if (PRESERVED_IDENTIFIERS.has(name)) return name;
     if (!idMap.has(name)) idMap.set(name, `$${counter.val++}`);
     return idMap.get(name)!;
   }
 
-  if (node.type === "StringLiteral" || node.type === "Literal" && typeof node.value === "string") return '"S"';
-  if (node.type === "NumericLiteral" || node.type === "Literal" && typeof node.value === "number") return "N";
-  if (node.type === "BooleanLiteral") return String(node.value);
-  if (node.type === "NullLiteral") return "null";
+  // Literals
+  if (type === "StringLiteral") return '"S"';
+  if (type === "NumericLiteral") return "N";
+  if (type === "BooleanLiteral") return String((node as { value: boolean }).value);
+  if (type === "NullLiteral") return "null";
 
-  if (node.type === "BlockStatement") {
-    return `{${node.body.map((n: any) => normalizeAST(n, idMap, counter)).join(";")}}`;
+  // Block
+  if (type === "BlockStatement") {
+    const block = node as BlockStatement;
+    return `{${block.body.map(n => normalizeAST(n, idMap, counter)).join(";")}}`;
   }
 
-  if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") {
-    const params = (node.params || []).map((p: any) => normalizeAST(p, idMap, counter)).join(",");
-    const body = node.body ? normalizeAST(node.body, idMap, counter) : "";
-    const async = node.async ? "async " : "";
+  // Functions
+  if (type === "FunctionDeclaration" || type === "FunctionExpression") {
+    const fn = node as FunctionDeclaration | FunctionExpression;
+    const params = fn.params.map(p => normalizeAST(p as ASTNode, idMap, counter)).join(",");
+    const body = fn.body ? normalizeAST(fn.body, idMap, counter) : "";
+    const async = fn.async ? "async " : "";
     return `${async}function(${params})${body}`;
   }
 
-  if (node.type === "ArrowFunctionExpression") {
-    const params = (node.params || []).map((p: any) => normalizeAST(p, idMap, counter)).join(",");
-    const body = normalizeAST(node.body, idMap, counter);
-    const async = node.async ? "async " : "";
+  if (type === "ArrowFunctionExpression") {
+    const arrow = node as ArrowFunctionExpression;
+    const params = arrow.params.map(p => normalizeAST(p as ASTNode, idMap, counter)).join(",");
+    const body = normalizeAST(arrow.body as ASTNode, idMap, counter);
+    const async = arrow.async ? "async " : "";
     return `${async}(${params})=>${body}`;
   }
 
-  if (node.type === "VariableDeclaration") {
-    return `${node.kind} ${node.declarations.map((d: any) => normalizeAST(d, idMap, counter)).join(",")}`;
+  // Variables
+  if (type === "VariableDeclaration") {
+    const decl = node as VariableDeclaration;
+    return `${decl.kind} ${decl.declarations.map(d => normalizeAST(d, idMap, counter)).join(",")}`;
   }
 
-  if (node.type === "VariableDeclarator") {
-    const id = normalizeAST(node.id, idMap, counter);
-    const init = node.init ? `=${normalizeAST(node.init, idMap, counter)}` : "";
+  if (type === "VariableDeclarator") {
+    const decl = node as VariableDeclarator;
+    const id = normalizeAST(decl.id as ASTNode, idMap, counter);
+    const init = decl.init ? `=${normalizeAST(decl.init as ASTNode, idMap, counter)}` : "";
     return `${id}${init}`;
   }
 
-  if (node.type === "ReturnStatement") {
-    return `return ${node.argument ? normalizeAST(node.argument, idMap, counter) : ""}`;
+  // Statements
+  if (type === "ReturnStatement") {
+    const ret = node as ReturnStatement;
+    return `return ${ret.argument ? normalizeAST(ret.argument as ASTNode, idMap, counter) : ""}`;
   }
 
-  if (node.type === "IfStatement") {
-    const test = normalizeAST(node.test, idMap, counter);
-    const consequent = normalizeAST(node.consequent, idMap, counter);
-    const alternate = node.alternate ? ` else ${normalizeAST(node.alternate, idMap, counter)}` : "";
+  if (type === "IfStatement") {
+    const ifStmt = node as IfStatement;
+    const test = normalizeAST(ifStmt.test as ASTNode, idMap, counter);
+    const consequent = normalizeAST(ifStmt.consequent, idMap, counter);
+    const alternate = ifStmt.alternate ? ` else ${normalizeAST(ifStmt.alternate, idMap, counter)}` : "";
     return `if(${test})${consequent}${alternate}`;
   }
 
-  if (node.type === "ForStatement") {
-    const init = node.init ? normalizeAST(node.init, idMap, counter) : "";
-    const test = node.test ? normalizeAST(node.test, idMap, counter) : "";
-    const update = node.update ? normalizeAST(node.update, idMap, counter) : "";
-    const body = normalizeAST(node.body, idMap, counter);
+  if (type === "ForStatement") {
+    const forStmt = node as ForStatement;
+    const init = forStmt.init ? normalizeAST(forStmt.init as ASTNode, idMap, counter) : "";
+    const test = forStmt.test ? normalizeAST(forStmt.test as ASTNode, idMap, counter) : "";
+    const update = forStmt.update ? normalizeAST(forStmt.update as ASTNode, idMap, counter) : "";
+    const body = normalizeAST(forStmt.body, idMap, counter);
     return `for(${init};${test};${update})${body}`;
   }
 
-  if (node.type === "CallExpression") {
-    const callee = normalizeAST(node.callee, idMap, counter);
-    const args = (node.arguments || []).map((a: any) => normalizeAST(a, idMap, counter)).join(",");
+  if (type === "ExpressionStatement") {
+    const exprStmt = node as ExpressionStatement;
+    return normalizeAST(exprStmt.expression as ASTNode, idMap, counter);
+  }
+
+  // Expressions
+  if (type === "CallExpression") {
+    const call = node as CallExpression;
+    const callee = normalizeAST(call.callee as ASTNode, idMap, counter);
+    const args = call.arguments.map(a => normalizeAST(a as ASTNode, idMap, counter)).join(",");
     return `${callee}(${args})`;
   }
 
-  if (node.type === "MemberExpression") {
-    const obj = normalizeAST(node.object, idMap, counter);
-    const prop = node.computed 
-      ? `[${normalizeAST(node.property, idMap, counter)}]`
-      : `.${normalizeAST(node.property, idMap, counter)}`;
+  if (type === "MemberExpression") {
+    const member = node as MemberExpression;
+    const obj = normalizeAST(member.object as ASTNode, idMap, counter);
+    const prop = member.computed 
+      ? `[${normalizeAST(member.property as ASTNode, idMap, counter)}]`
+      : `.${normalizeAST(member.property as ASTNode, idMap, counter)}`;
     return obj + prop;
   }
 
-  if (node.type === "BinaryExpression" || node.type === "LogicalExpression") {
-    return `(${normalizeAST(node.left, idMap, counter)}${node.operator}${normalizeAST(node.right, idMap, counter)})`;
+  if (type === "BinaryExpression" || type === "LogicalExpression") {
+    const bin = node as BinaryExpression | LogicalExpression;
+    return `(${normalizeAST(bin.left as ASTNode, idMap, counter)}${bin.operator}${normalizeAST(bin.right as ASTNode, idMap, counter)})`;
   }
 
-  if (node.type === "UnaryExpression") {
-    return `${node.operator}${normalizeAST(node.argument, idMap, counter)}`;
+  if (type === "UnaryExpression") {
+    const unary = node as UnaryExpression;
+    return `${unary.operator}${normalizeAST(unary.argument as ASTNode, idMap, counter)}`;
   }
 
-  if (node.type === "ConditionalExpression") {
-    return `(${normalizeAST(node.test, idMap, counter)}?${normalizeAST(node.consequent, idMap, counter)}:${normalizeAST(node.alternate, idMap, counter)})`;
+  if (type === "ConditionalExpression") {
+    const cond = node as ConditionalExpression;
+    return `(${normalizeAST(cond.test as ASTNode, idMap, counter)}?${normalizeAST(cond.consequent as ASTNode, idMap, counter)}:${normalizeAST(cond.alternate as ASTNode, idMap, counter)})`;
   }
 
-  if (node.type === "AssignmentExpression") {
-    return `${normalizeAST(node.left, idMap, counter)}${node.operator}${normalizeAST(node.right, idMap, counter)}`;
+  if (type === "AssignmentExpression") {
+    const assign = node as AssignmentExpression;
+    return `${normalizeAST(assign.left as ASTNode, idMap, counter)}${assign.operator}${normalizeAST(assign.right as ASTNode, idMap, counter)}`;
   }
 
-  if (node.type === "ObjectExpression") {
-    const props = (node.properties || []).map((p: any) => normalizeAST(p, idMap, counter)).join(",");
+  if (type === "ObjectExpression") {
+    const obj = node as ObjectExpression;
+    const props = obj.properties.map(p => normalizeAST(p as ASTNode, idMap, counter)).join(",");
     return `{${props}}`;
   }
 
-  if (node.type === "Property" || node.type === "ObjectProperty") {
-    const key = normalizeAST(node.key, idMap, counter);
-    const value = normalizeAST(node.value, idMap, counter);
-    return node.shorthand ? key : `${key}:${value}`;
+  if (type === "Property") {
+    const prop = node as ObjectProperty;
+    const key = normalizeAST(prop.key as ASTNode, idMap, counter);
+    const value = normalizeAST(prop.value as ASTNode, idMap, counter);
+    return prop.shorthand ? key : `${key}:${value}`;
   }
 
-  if (node.type === "ArrayExpression") {
-    return `[${(node.elements || []).map((e: any) => e ? normalizeAST(e, idMap, counter) : "").join(",")}]`;
+  if (type === "ArrayExpression") {
+    const arr = node as ArrayExpression;
+    return `[${arr.elements.map(e => normalizeAST(e as ASTNode, idMap, counter)).join(",")}]`;
   }
 
-  if (node.type === "SpreadElement") {
-    return `...${normalizeAST(node.argument, idMap, counter)}`;
+  if (type === "SpreadElement") {
+    const spread = node as SpreadElement;
+    return `...${normalizeAST(spread.argument as ASTNode, idMap, counter)}`;
   }
 
-  if (node.type === "AwaitExpression") {
-    return `await ${normalizeAST(node.argument, idMap, counter)}`;
-  }
-
-  if (node.type === "ExpressionStatement") {
-    return normalizeAST(node.expression, idMap, counter);
+  if (type === "AwaitExpression") {
+    const awaitExpr = node as AwaitExpression;
+    return `await ${normalizeAST(awaitExpr.argument as ASTNode, idMap, counter)}`;
   }
 
   // TypeScript - skip type annotations for normalization
-  if (node.type?.startsWith("TS")) return "";
+  if (type.startsWith("TS")) return "";
 
-  return node.type || "";
+  return type;
 }
 
 function getLineNumber(content: string, offset: number): number {
@@ -162,45 +225,53 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
   
   try {
     const result = parseSync(filePath, content);
-    const program = result.program;
+    const program: Program = result.program;
 
-    for (let i = 0; i < program.body.length; i++) {
-      const node = program.body[i] as any;
+    for (const node of program.body) {
       const isExported = node.type === "ExportNamedDeclaration" || node.type === "ExportDefaultDeclaration";
-      const actualNode = isExported ? node.declaration : node;
+      const actualNode = isExported 
+        ? (node as ExportNamedDeclaration | ExportDefaultDeclaration).declaration 
+        : node;
       
       if (!actualNode) continue;
 
-      if (actualNode.type === "FunctionDeclaration" && actualNode.id) {
+      // Function declarations
+      if (actualNode.type === "FunctionDeclaration") {
+        const fn = actualNode as FunctionDeclaration;
+        if (!fn.id) continue;
+        
         const idMap = new Map<string, string>();
         const counter = { val: 0 };
-        const normalized = normalizeAST(actualNode, idMap, counter);
+        const normalized = normalizeAST(fn, idMap, counter);
         
         blocks.push({
           type: "function",
-          name: actualNode.id.name,
-          content: content.slice(actualNode.start, actualNode.end),
+          name: fn.id.name,
+          content: content.slice(fn.start, fn.end),
           normalized,
           hash: simpleHash(normalized),
           filePath,
-          startLine: getLineNumber(content, actualNode.start),
-          endLine: getLineNumber(content, actualNode.end),
+          startLine: getLineNumber(content, fn.start),
+          endLine: getLineNumber(content, fn.end),
           exported: isExported,
         });
       }
 
+      // Arrow functions and function expressions in variable declarations
       if (actualNode.type === "VariableDeclaration") {
-        for (const decl of actualNode.declarations) {
-          if (!decl.id?.name || !decl.init) continue;
+        const varDecl = actualNode as VariableDeclaration;
+        for (const decl of varDecl.declarations) {
+          const id = decl.id as BindingIdentifier;
+          if (!id.name || !decl.init) continue;
           if (decl.init.type !== "ArrowFunctionExpression" && decl.init.type !== "FunctionExpression") continue;
           
           const idMap = new Map<string, string>();
           const counter = { val: 0 };
-          const normalized = normalizeAST(decl.init, idMap, counter);
+          const normalized = normalizeAST(decl.init as ASTNode, idMap, counter);
           
           blocks.push({
             type: "arrow",
-            name: decl.id.name,
+            name: id.name,
             content: content.slice(decl.start, decl.end),
             normalized,
             hash: simpleHash(normalized),
@@ -212,50 +283,56 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
         }
       }
 
+      // TypeScript interfaces
       if (actualNode.type === "TSInterfaceDeclaration") {
-        const nodeContent = content.slice(actualNode.start, actualNode.end);
+        const iface = actualNode as TSInterfaceDeclaration;
+        const nodeContent = content.slice(iface.start, iface.end);
         blocks.push({
           type: "interface",
-          name: actualNode.id.name,
+          name: iface.id.name,
           content: nodeContent,
           normalized: nodeContent.replace(/\s+/g, " "),
           hash: simpleHash(nodeContent.replace(/\s+/g, " ")),
           filePath,
-          startLine: getLineNumber(content, actualNode.start),
-          endLine: getLineNumber(content, actualNode.end),
+          startLine: getLineNumber(content, iface.start),
+          endLine: getLineNumber(content, iface.end),
           exported: isExported,
         });
       }
 
+      // TypeScript type aliases
       if (actualNode.type === "TSTypeAliasDeclaration") {
-        const nodeContent = content.slice(actualNode.start, actualNode.end);
+        const typeAlias = actualNode as TSTypeAliasDeclaration;
+        const nodeContent = content.slice(typeAlias.start, typeAlias.end);
         blocks.push({
           type: "type",
-          name: actualNode.id.name,
+          name: typeAlias.id.name,
           content: nodeContent,
           normalized: nodeContent.replace(/\s+/g, " "),
           hash: simpleHash(nodeContent.replace(/\s+/g, " ")),
           filePath,
-          startLine: getLineNumber(content, actualNode.start),
-          endLine: getLineNumber(content, actualNode.end),
+          startLine: getLineNumber(content, typeAlias.start),
+          endLine: getLineNumber(content, typeAlias.end),
           exported: isExported,
         });
       }
 
-      if (actualNode.type === "ClassDeclaration" && actualNode.id) {
-        const idMap = new Map<string, string>();
-        const counter = { val: 0 };
-        const normalized = `class{}`; // Simplified for now
+      // Classes
+      if (actualNode.type === "ClassDeclaration") {
+        const cls = actualNode as Class;
+        if (!cls.id) continue;
+        
+        const normalized = `class{}`;
         
         blocks.push({
           type: "class",
-          name: actualNode.id.name,
-          content: content.slice(actualNode.start, actualNode.end),
+          name: cls.id.name,
+          content: content.slice(cls.start, cls.end),
           normalized,
           hash: simpleHash(normalized),
           filePath,
-          startLine: getLineNumber(content, actualNode.start),
-          endLine: getLineNumber(content, actualNode.end),
+          startLine: getLineNumber(content, cls.start),
+          endLine: getLineNumber(content, cls.end),
           exported: isExported,
         });
       }
@@ -282,7 +359,6 @@ export interface ASTDuplicateGroup {
 }
 
 export function findASTDuplicates(blocks: ASTBlock[], _minSimilarity: number): ASTDuplicateGroup[] {
-  const groups: ASTDuplicateGroup[] = [];
   const hashGroups = new Map<string, ASTBlock[]>();
 
   for (const block of blocks) {
@@ -291,10 +367,13 @@ export function findASTDuplicates(blocks: ASTBlock[], _minSimilarity: number): A
     hashGroups.set(block.hash, existing);
   }
 
+  const groups: ASTDuplicateGroup[] = [];
   let groupId = 0;
+
   for (const [, matches] of hashGroups) {
     if (matches.length < 2) continue;
 
+    // Filter duplicates from same location
     const uniqueMatches = matches.filter((m, i) => 
       !matches.slice(0, i).some(prev => 
         prev.filePath === m.filePath && 
@@ -304,6 +383,7 @@ export function findASTDuplicates(blocks: ASTBlock[], _minSimilarity: number): A
 
     if (uniqueMatches.length < 2) continue;
 
+    // Only cross-file duplicates
     const uniqueFiles = new Set(uniqueMatches.map(m => m.filePath));
     if (uniqueFiles.size < 2) continue;
 
@@ -328,4 +408,3 @@ export function findASTDuplicates(blocks: ASTBlock[], _minSimilarity: number): A
   groups.sort((a, b) => b.matches.length - a.matches.length);
   return groups;
 }
-
