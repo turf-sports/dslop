@@ -2,23 +2,48 @@
 
 **D**etect **S**imilar/**L**ines **O**f **P**rogramming - A fast duplicate code detector.
 
+## Quick Start
+
+Run instantly with npx (no install required):
+
+```bash
+npx dslop .
+```
+
 ## Installation
 
 ```bash
-bun install
+# Install globally
+npm install -g dslop
+
+# Or with other package managers
+pnpm add -g dslop
+bun add -g dslop
+yarn global add dslop
 ```
 
 ## Usage
 
 ```bash
 # Scan current directory
-bun run index.ts .
+dslop .
 
 # Scan specific directory with options
-bun run index.ts ./src -m 6 -s 80
+dslop ./src -m 6 -s 80
+
+# Only show duplicates across packages (great for monorepos)
+dslop . --cross-package
 
 # Output as JSON
-bun run index.ts . --json
+dslop . --json
+```
+
+Or run without installing:
+
+```bash
+npx dslop .
+bunx dslop .
+pnpm dlx dslop .
 ```
 
 ## Options
@@ -43,25 +68,15 @@ bun run index.ts . --json
 5. **Similarity Matching**: Uses Jaccard similarity on line sets for near-duplicates
 6. **Filtering**: Removes overlapping blocks and deduplicates groups
 
-## Configuration
+## Monorepo Mode
 
-All detection parameters are configurable in `src/constants.ts`:
+Use `--cross-package` to find duplicates that span across different packages/apps - perfect for identifying code that should be moved to a shared library:
 
-```typescript
-// Block extraction
-MAX_BLOCK_SIZE = 100           // Maximum lines per block
-BLOCK_SIZE_MULTIPLIER = 1.5    // Growth factor for multi-size extraction
-MIN_MEANINGFUL_LINE_RATIO = 0.6 // Skip blocks with too many comments/whitespace
-
-// Detection
-SIZE_BUCKET_DIVISOR = 5        // Group blocks by ~5 line buckets
-MAX_BLOCKS_FOR_SIMILARITY = 10000 // Skip similarity for large codebases
-GROUP_OVERLAP_THRESHOLD = 0.5  // Dedup threshold
-
-// Output
-MAX_GROUPS_DETAILED = 20       // Max groups to show in detail
-MAX_MATCHES_IN_SUMMARY = 5     // Max file matches per group
+```bash
+dslop . --cross-package
 ```
+
+This filters results to only show duplicates where occurrences are in different `apps/`, `packages/`, or `libs/` directories.
 
 ## Example Output
 
@@ -101,11 +116,22 @@ SUMMARY
   Average similarity:        95%
 ```
 
-## Build
+## Development
 
 ```bash
+# Clone and install
+git clone https://github.com/turf-sports/dslop.git
+cd dslop
+bun install
+
+# Run in dev mode
+bun run dev
+
+# Build for npm
+bun run build
+
 # Create standalone binary
-bun build --compile ./index.ts --outfile dslop
+bun run build:binary
 ```
 
 ## License

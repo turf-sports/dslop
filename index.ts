@@ -11,7 +11,7 @@ import { findDuplicates } from "./src/detector";
 import { formatOutput, formatStats } from "./src/formatter";
 import { scanDirectory, type ScanOptions } from "./src/scanner";
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 
 function showHelp() {
   console.log(`
