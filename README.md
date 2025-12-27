@@ -149,11 +149,30 @@ function getInitials(person: Person): string {
 - Tiny functions (configurable via `--min-lines`)
 - Common patterns from UI libraries (shadcn components, etc.)
 
+## Performance
+
+dslop uses aggressive caching to make subsequent runs fast:
+
+```bash
+# First run (builds cache)
+$ dslop --all
+Scanned 1410 files in 2862ms
+Cache: 0 hits, 1410 misses (0% hit rate)
+
+# Second run (uses cache)
+$ dslop --all
+Scanned 1410 files in 305ms
+Cache: 1410 hits, 0 misses (100% hit rate)
+```
+
+Cache is stored in `.dslop-cache` in your project root. Add it to `.gitignore`.
+
+Use `--no-cache` to bypass the cache.
+
 ## Limitations
 
 - **TypeScript/JavaScript only:** AST parsing uses Babel with TS/JSX plugins
 - **No cross-language:** Won't detect duplication across languages
-- **Memory:** Loads all AST nodes in memory. Very large codebases (>1M lines) may be slow
 
 ## License
 
