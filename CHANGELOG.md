@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.4.1
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.4.0...v1.4.1)
+
+### 📖 Documentation
+
+- Add technical details and limitations ([3598291](https://github.com/turf-sports/dslop/commit/3598291))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.4.0
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.3.1...v1.4.0)
