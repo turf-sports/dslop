@@ -13,9 +13,12 @@
   "scripts": {
     "dev": "bun run --watch index.ts",
     "start": "bun run index.ts",
-    "build": "bun build ./index.ts --outdir ./dist --target node --format esm && sed -i '' '1,3d' ./dist/index.js && echo '#!/usr/bin/env node\n' | cat - ./dist/index.js > temp && mv temp ./dist/index.js && chmod +x ./dist/index.js",
+    "build": "bun build ./index.ts --outdir ./dist --target node --format esm && VERSION=$(node -p \"require('./package.json').version\") && sed -i '' '1,3d' ./dist/index.js && sed -i '' \"s/__INJECT_VERSION__/$VERSION/g\" ./dist/index.js && echo '#!/usr/bin/env node\n' | cat - ./dist/index.js > temp && mv temp ./dist/index.js && chmod +x ./dist/index.js",
     "build:binary": "bun build --compile ./index.ts --outfile dslop",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "release": "npm version patch && git push && git push --tags && npm publish",
+    "release:minor": "npm version minor && git push && git push --tags && npm publish",
+    "release:major": "npm version major && git push && git push --tags && npm publish"
   },
   "keywords": [
     "duplicate",

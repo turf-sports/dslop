@@ -11,7 +11,8 @@ import { findDuplicates } from "./src/detector";
 import { formatOutput, formatStats } from "./src/formatter";
 import { scanDirectory, type ScanOptions } from "./src/scanner";
 
-const VERSION = "1.0.1";
+// This gets replaced at build time by the build script
+const VERSION = process.env.npm_package_version || "__INJECT_VERSION__";
 
 function showHelp() {
   console.log(`
