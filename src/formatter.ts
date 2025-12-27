@@ -1,6 +1,6 @@
 import path from "node:path";
-import type { DuplicateGroup, DeclarationDuplicate } from "./detector";
 import type { ASTDuplicateGroup } from "./ast";
+import type { DeclarationDuplicate, DuplicateGroup } from "./detector";
 import {
   MAX_PATH_DISPLAY_LENGTH,
   MAX_MATCHES_IN_SUMMARY,
@@ -325,7 +325,8 @@ export function formatASTDuplicates(groups: ASTDuplicateGroup[], basePath: strin
   lines.push("");
 
   for (let i = 0; i < Math.min(groups.length, 20); i++) {
-    const group = groups[i]!;
+    const group = groups[i];
+    if (!group) continue;
     const typeLabel = AST_TYPE_LABELS[group.type] || group.type;
     
     lines.push(`${bold}${typeLabel} ${i + 1}${reset} │ ${red}${bold}IDENTICAL${reset} │ ${group.matches.length} occurrences`);

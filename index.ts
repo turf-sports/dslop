@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
-import { parseArgs } from "node:util";
 import { execSync } from "node:child_process";
 import path from "node:path";
+import { parseArgs } from "node:util";
 import {
   DEFAULT_MIN_LINES,
   DEFAULT_SIMILARITY,
@@ -32,12 +32,12 @@ function parseDiffOutput(diff: string, cwd: string): ChangedFiles {
       }
     } else if (line.startsWith("@@") && currentFile) {
       const match = line.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-      if (match) {
+      if (match?.[1]) {
         newLineNum = parseInt(match[1], 10);
       }
     } else if (currentFile && newLineNum > 0) {
       if (line.startsWith("+") && !line.startsWith("+++")) {
-        const ranges = changes.get(currentFile)!;
+        const ranges = changes.get(currentFile) ?? [];
         const lastRange = ranges[ranges.length - 1];
         if (lastRange && lastRange.end === newLineNum - 1) {
           lastRange.end = newLineNum;
@@ -61,10 +61,9 @@ function getChangedLines(targetPath: string): ChangedFiles {
 
   const mergeChanges = (newChanges: ChangedFiles) => {
     for (const [file, ranges] of newChanges) {
-      if (!allChanges.has(file)) {
-        allChanges.set(file, []);
-      }
-      allChanges.get(file)!.push(...ranges);
+      const existing = allChanges.get(file) ?? [];
+      existing.push(...ranges);
+      allChanges.set(file, existing);
     }
   };
 
@@ -211,8 +210,8 @@ async function main() {
   }
 
   console.log(`\nScanning ${targetPath}...`);
-  if (!scanAll) {
-    console.log(`  Mode: checking changed lines in ${changedLines!.size} files`);
+  if (!scanAll && changedLines) {
+    console.log(`  Mode: checking changed lines in ${changedLines.size} files`);
   } else {
     console.log(`  Mode: full codebase scan`);
   }
@@ -289,7 +288,7 @@ async function main() {
         return groups.filter((group) => {
           const packages = new Set(
             group.matches.map((m) => {
-              const match = m.filePath.match(/(?:apps|packages|libs)\/([^\/]+)/);
+              const match = m.filePath.match(/(?:apps|packages|libs)\/([^/]+)/);
               return match ? match[1] : m.filePath.split("/")[0];
             })
           );

@@ -1,9 +1,9 @@
-import { glob } from "glob";
-import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
-import { normalizeCode } from "./normalizer";
-import { extractDeclarations, type Declaration, type DeclarationType } from "./declarations";
+import path from "node:path";
+import { glob } from "glob";
 import { extractASTBlocks, type ASTBlock } from "./ast";
+import { extractDeclarations, type Declaration, type DeclarationType } from "./declarations";
+import { normalizeCode } from "./normalizer";
 import {
   MAX_BLOCK_SIZE,
   BLOCK_SIZE_MULTIPLIER,

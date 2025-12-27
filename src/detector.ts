@@ -397,7 +397,7 @@ function extractPackageInfo(filePath: string): {
   subPath: string;
 } {
   // Match patterns like apps/xxx, packages/xxx, libs/xxx
-  const match = filePath.match(/(apps|packages|libs)\/([^\/]+)\/(.+)/);
+  const match = filePath.match(/(apps|packages|libs)\/([^/]+)\/(.+)/);
   if (match) {
     return {
       type: match[1] as "app" | "package" | "lib",
@@ -418,7 +418,7 @@ function extractPackageInfo(filePath: string): {
 /**
  * Infer a suggested name from the code pattern
  */
-function inferSuggestedName(pattern: string, matches: DuplicateMatch[]): string | undefined {
+function inferSuggestedName(_pattern: string, matches: DuplicateMatch[]): string | undefined {
   // Try to extract function/component/schema name from content
   const firstMatch = matches[0];
   if (!firstMatch) return undefined;
@@ -484,7 +484,7 @@ function inferSuggestedName(pattern: string, matches: DuplicateMatch[]): string 
  */
 function generateRefactoringSuggestion(
   group: DuplicateGroup,
-  basePath: string
+  _basePath: string
 ): RefactoringSuggestion {
   const matches = group.matches;
   
@@ -504,8 +504,8 @@ function generateRefactoringSuggestion(
   const suggestedName = inferSuggestedName(group.pattern, matches);
   
   // Case 1: All in same package - suggest extracting to local shared location
-  if (packageList.length === 1) {
-    const pkg = packageList[0]!;
+  if (packageList.length === 1 && packageList[0]) {
+    const pkg = packageList[0];
     const subPaths = packageInfos.map(p => p.subPath);
     
     // Find common path prefix
@@ -551,7 +551,8 @@ function generateRefactoringSuggestion(
     // Find the most "shared" package (one that's already imported by others)
     const sharedPackage = packages.find(p => 
       p.name === "shared" || p.name === "common" || p.name === "utils"
-    ) ?? packages[0]!;
+    ) ?? packages[0];
+    if (!sharedPackage) return { targetLocation: "packages/shared/src", reason: "Duplicated across packages", confidence: "low", suggestedName };
     
     return {
       targetLocation: `packages/${sharedPackage.name}/src`,
@@ -678,7 +679,8 @@ export function findDeclarationDuplicates(
     for (let i = 0; i < typeDecls.length; i++) {
       if (processed.has(i)) continue;
       
-      const declA = typeDecls[i]!;
+      const declA = typeDecls[i];
+      if (!declA) continue;
       const matches: DeclarationDuplicate["matches"] = [{
         name: declA.name,
         filePath: declA.filePath,
@@ -694,7 +696,8 @@ export function findDeclarationDuplicates(
       for (let j = i + 1; j < typeDecls.length; j++) {
         if (processed.has(j)) continue;
         
-        const declB = typeDecls[j]!;
+        const declB = typeDecls[j];
+        if (!declB) continue;
         
         if (declA.filePath === declB.filePath && 
             Math.abs(declA.startLine - declB.startLine) < 5) continue;

@@ -1,5 +1,5 @@
 import { parse } from "@babel/parser";
-import _traverse from "@babel/traverse";
+import _traverse, { type NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 
 const traverse = (_traverse as unknown as { default: typeof _traverse }).default || _traverse;
@@ -42,7 +42,7 @@ function normalizeNode(node: t.Node, idMap: Map<string, string>, counter: { val:
     if (!idMap.has(name)) {
       idMap.set(name, `$${counter.val++}`);
     }
-    return idMap.get(name)!;
+    return idMap.get(name) ?? name;
   }
 
   if (t.isStringLiteral(node)) return '"S"';
@@ -55,7 +55,7 @@ function normalizeNode(node: t.Node, idMap: Map<string, string>, counter: { val:
   if (t.isProgram(node)) return node.body.map(n => normalizeNode(n, idMap, counter)).join(";");
 
   if (t.isBlockStatement(node)) {
-    return "{" + node.body.map(n => normalizeNode(n, idMap, counter)).join(";") + "}";
+    return `{${node.body.map(n => normalizeNode(n, idMap, counter)).join(";")}}`;
   }
 
   if (t.isFunctionDeclaration(node) || t.isFunctionExpression(node)) {
@@ -73,23 +73,23 @@ function normalizeNode(node: t.Node, idMap: Map<string, string>, counter: { val:
   }
 
   if (t.isVariableDeclaration(node)) {
-    return node.kind + " " + node.declarations.map(d => normalizeNode(d, idMap, counter)).join(",");
+    return `${node.kind} ${node.declarations.map(d => normalizeNode(d, idMap, counter)).join(",")}`;
   }
 
   if (t.isVariableDeclarator(node)) {
     const id = normalizeNode(node.id, idMap, counter);
-    const init = node.init ? "=" + normalizeNode(node.init, idMap, counter) : "";
-    return id + init;
+    const init = node.init ? `=${normalizeNode(node.init, idMap, counter)}` : "";
+    return `${id}${init}`;
   }
 
   if (t.isReturnStatement(node)) {
-    return "return " + (node.argument ? normalizeNode(node.argument, idMap, counter) : "");
+    return `return ${node.argument ? normalizeNode(node.argument, idMap, counter) : ""}`;
   }
 
   if (t.isIfStatement(node)) {
     const test = normalizeNode(node.test, idMap, counter);
     const consequent = normalizeNode(node.consequent, idMap, counter);
-    const alternate = node.alternate ? " else " + normalizeNode(node.alternate, idMap, counter) : "";
+    const alternate = node.alternate ? ` else ${normalizeNode(node.alternate, idMap, counter)}` : "";
     return `if(${test})${consequent}${alternate}`;
   }
 
@@ -115,7 +115,9 @@ function normalizeNode(node: t.Node, idMap: Map<string, string>, counter: { val:
 
   if (t.isTryStatement(node)) {
     const block = normalizeNode(node.block, idMap, counter);
-    const handler = node.handler ? `catch(${normalizeNode(node.handler.param!, idMap, counter)})${normalizeNode(node.handler.body, idMap, counter)}` : "";
+    const handler = node.handler 
+      ? `catch(${node.handler.param ? normalizeNode(node.handler.param, idMap, counter) : ""})${normalizeNode(node.handler.body, idMap, counter)}` 
+      : "";
     const finalizer = node.finalizer ? `finally${normalizeNode(node.finalizer, idMap, counter)}` : "";
     return `try${block}${handler}${finalizer}`;
   }
@@ -201,7 +203,7 @@ function normalizeNode(node: t.Node, idMap: Map<string, string>, counter: { val:
     const key = normalizeNode(node.key, idMap, counter);
     const params = node.params.map(p => normalizeNode(p, idMap, counter)).join(",");
     const body = normalizeNode(node.body, idMap, counter);
-    const kind = node.kind !== "method" ? node.kind + " " : "";
+    const kind = node.kind !== "method" ? `${node.kind} ` : "";
     const async = node.async ? "async " : "";
     const static_ = node.static ? "static " : "";
     return `${static_}${async}${kind}${key}(${params})${body}`;
@@ -252,9 +254,9 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
     });
 
     traverse(ast, {
-      FunctionDeclaration(path) {
+      FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         const node = path.node;
-        if (!node.id || !node.loc) return;
+        if (!node.id || !node.loc || node.start === null || node.end === null) return;
         
         const idMap = new Map<string, string>();
         const counter = { val: 0 };
@@ -263,7 +265,7 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
         blocks.push({
           type: "function",
           name: node.id.name,
-          content: content.slice(node.start!, node.end!),
+          content: content.slice(node.start, node.end),
           normalized,
           hash: simpleHash(normalized),
           filePath,
@@ -273,10 +275,11 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
         });
       },
 
-      VariableDeclaration(path) {
+      VariableDeclaration(path: NodePath<t.VariableDeclaration>) {
         const node = path.node;
         for (const decl of node.declarations) {
           if (!t.isIdentifier(decl.id) || !decl.init || !decl.loc) continue;
+          if (decl.start === null || decl.end === null) continue;
           
           // Only extract arrow functions and function expressions
           if (!t.isArrowFunctionExpression(decl.init) && !t.isFunctionExpression(decl.init)) continue;
@@ -288,7 +291,7 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
           blocks.push({
             type: "arrow",
             name: decl.id.name,
-            content: content.slice(decl.start!, decl.end!),
+            content: content.slice(decl.start, decl.end),
             normalized,
             hash: simpleHash(normalized),
             filePath,
@@ -299,9 +302,9 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
         }
       },
 
-      ClassDeclaration(path) {
+      ClassDeclaration(path: NodePath<t.ClassDeclaration>) {
         const node = path.node;
-        if (!node.id || !node.loc) return;
+        if (!node.id || !node.loc || node.start === null || node.end === null) return;
         
         const idMap = new Map<string, string>();
         const counter = { val: 0 };
@@ -310,7 +313,7 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
         blocks.push({
           type: "class",
           name: node.id.name,
-          content: content.slice(node.start!, node.end!),
+          content: content.slice(node.start, node.end),
           normalized,
           hash: simpleHash(normalized),
           filePath,
@@ -320,16 +323,17 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
         });
       },
 
-      TSTypeAliasDeclaration(path) {
+      TSTypeAliasDeclaration(path: NodePath<t.TSTypeAliasDeclaration>) {
         const node = path.node;
-        if (!node.loc) return;
+        if (!node.loc || node.start === null || node.end === null) return;
         
+        const nodeContent = content.slice(node.start, node.end);
         blocks.push({
           type: "type",
           name: node.id.name,
-          content: content.slice(node.start!, node.end!),
-          normalized: content.slice(node.start!, node.end!).replace(/\s+/g, " "),
-          hash: simpleHash(content.slice(node.start!, node.end!).replace(/\s+/g, " ")),
+          content: nodeContent,
+          normalized: nodeContent.replace(/\s+/g, " "),
+          hash: simpleHash(nodeContent.replace(/\s+/g, " ")),
           filePath,
           startLine: node.loc.start.line,
           endLine: node.loc.end.line,
@@ -337,16 +341,17 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
         });
       },
 
-      TSInterfaceDeclaration(path) {
+      TSInterfaceDeclaration(path: NodePath<t.TSInterfaceDeclaration>) {
         const node = path.node;
-        if (!node.loc) return;
+        if (!node.loc || node.start === null || node.end === null) return;
         
+        const nodeContent = content.slice(node.start, node.end);
         blocks.push({
           type: "interface",
           name: node.id.name,
-          content: content.slice(node.start!, node.end!),
-          normalized: content.slice(node.start!, node.end!).replace(/\s+/g, " "),
-          hash: simpleHash(content.slice(node.start!, node.end!).replace(/\s+/g, " ")),
+          content: nodeContent,
+          normalized: nodeContent.replace(/\s+/g, " "),
+          hash: simpleHash(nodeContent.replace(/\s+/g, " ")),
           filePath,
           startLine: node.loc.start.line,
           endLine: node.loc.end.line,
@@ -361,7 +366,7 @@ export function extractASTBlocks(content: string, filePath: string): ASTBlock[] 
   return blocks;
 }
 
-export function findASTDuplicates(blocks: ASTBlock[], minSimilarity: number): ASTDuplicateGroup[] {
+export function findASTDuplicates(blocks: ASTBlock[], _minSimilarity: number): ASTDuplicateGroup[] {
   const groups: ASTDuplicateGroup[] = [];
   const hashGroups = new Map<string, ASTBlock[]>();
 
@@ -372,7 +377,7 @@ export function findASTDuplicates(blocks: ASTBlock[], minSimilarity: number): AS
   }
 
   let groupId = 0;
-  for (const [_hash, matches] of hashGroups) {
+  for (const [, matches] of hashGroups) {
     if (matches.length < 2) continue;
 
     // Filter out matches from the same location
@@ -385,7 +390,8 @@ export function findASTDuplicates(blocks: ASTBlock[], minSimilarity: number): AS
 
     if (uniqueMatches.length < 2) continue;
 
-    const firstMatch = uniqueMatches[0]!;
+    const firstMatch = uniqueMatches[0];
+    if (!firstMatch) continue;
     groups.push({
       id: groupId++,
       type: firstMatch.type,
