@@ -6,7 +6,7 @@ Find duplicate code in your codebase.
 npx dslop
 ```
 
-By default, checks your uncommitted changes against the codebase.
+By default, checks your branch changes (committed + uncommitted) against the codebase.
 
 ## Install
 
@@ -17,7 +17,7 @@ npm i -g dslop
 ## Usage
 
 ```bash
-dslop                        # check uncommitted changes for dupes
+dslop                        # check your PR/branch for dupes
 dslop --all                  # scan entire codebase
 dslop ./src -m 6 -s 80       # 6 line min, 80% similarity  
 dslop --all --cross-package  # cross-package dupes (monorepos)

@@ -17,17 +17,40 @@ const VERSION = process.env.npm_package_version || "__INJECT_VERSION__";
 
 function getChangedFiles(targetPath: string): Set<string> {
   const absolutePath = path.resolve(targetPath);
-  try {
-    const staged = execSync("git diff --cached --name-only", { cwd: absolutePath, encoding: "utf-8" });
-    const unstaged = execSync("git diff --name-only", { cwd: absolutePath, encoding: "utf-8" });
-    const untracked = execSync("git ls-files --others --exclude-standard", { cwd: absolutePath, encoding: "utf-8" });
-    
-    const files = new Set<string>();
-    for (const file of [...staged.split("\n"), ...unstaged.split("\n"), ...untracked.split("\n")]) {
+  const files = new Set<string>();
+  
+  const addFiles = (output: string) => {
+    for (const file of output.split("\n")) {
       if (file.trim()) {
         files.add(path.resolve(absolutePath, file.trim()));
       }
     }
+  };
+
+  try {
+    // Uncommitted: staged
+    addFiles(execSync("git diff --cached --name-only", { cwd: absolutePath, encoding: "utf-8" }));
+    // Uncommitted: unstaged  
+    addFiles(execSync("git diff --name-only", { cwd: absolutePath, encoding: "utf-8" }));
+    // Uncommitted: untracked
+    addFiles(execSync("git ls-files --others --exclude-standard", { cwd: absolutePath, encoding: "utf-8" }));
+    
+    // Committed: changes on current branch vs main/master
+    try {
+      const baseBranch = execSync("git rev-parse --abbrev-ref origin/HEAD 2>/dev/null || echo origin/main", { cwd: absolutePath, encoding: "utf-8" }).trim().replace("origin/", "");
+      const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: absolutePath, encoding: "utf-8" }).trim();
+      
+      if (currentBranch !== baseBranch) {
+        // Get files changed in commits on this branch
+        const mergeBase = execSync(`git merge-base ${baseBranch} HEAD 2>/dev/null || echo ""`, { cwd: absolutePath, encoding: "utf-8" }).trim();
+        if (mergeBase) {
+          addFiles(execSync(`git diff --name-only ${mergeBase}...HEAD`, { cwd: absolutePath, encoding: "utf-8" }));
+        }
+      }
+    } catch {
+      // Not on a branch or can't find base, just use uncommitted
+    }
+    
     return files;
   } catch {
     return new Set();
@@ -41,7 +64,7 @@ dslop - Detect Similar/Duplicate Lines Of Programming
 Usage:
   dslop [path] [options]
 
-By default, checks uncommitted changes against the codebase.
+By default, checks your branch changes (committed + uncommitted) against the codebase.
 
 Arguments:
   path                  Directory to scan (default: current directory)
@@ -59,7 +82,7 @@ Options:
   -v, --version         Show version
 
 Examples:
-  dslop                            Check uncommitted changes for duplicates
+  dslop                            Check your PR/branch changes for duplicates
   dslop --all                      Scan entire codebase
   dslop ./src -m 6 -s 80           Scan src with 6 line min, 80% similarity
   dslop --all --cross-package      Cross-package duplicates in entire codebase
@@ -128,13 +151,13 @@ async function main() {
   const changedFiles = !scanAll ? getChangedFiles(targetPath) : null;
   
   if (!scanAll && changedFiles?.size === 0) {
-    console.log("\nNo uncommitted changes found. Use --all to scan entire codebase.");
+    console.log("\nNo changes found. Use --all to scan entire codebase.");
     process.exit(0);
   }
 
   console.log(`\nScanning ${targetPath}...`);
   if (!scanAll) {
-    console.log(`  Mode: checking ${changedFiles!.size} uncommitted files`);
+    console.log(`  Mode: checking ${changedFiles!.size} changed files`);
   } else {
     console.log(`  Mode: full codebase scan`);
   }
