@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.8.0
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.7.2...v1.8.0)
+
+### 🔥 Performance
+
+- Switch to oxc parser - 9x faster first run ([028a9d3](https://github.com/turf-sports/dslop/commit/028a9d3))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.7.2
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.7.1...v1.7.2)
