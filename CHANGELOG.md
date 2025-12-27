@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.7.2
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.7.1...v1.7.2)
+
+### 🔥 Performance
+
+- 50x faster - parallel processing, cache line counts ([de430e5](https://github.com/turf-sports/dslop/commit/de430e5))
+
+### 📖 Documentation
+
+- Update performance numbers ([1c6465e](https://github.com/turf-sports/dslop/commit/1c6465e))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.7.1
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.7.0...v1.7.1)
