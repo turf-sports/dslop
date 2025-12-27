@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.0.6
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.0.5...v1.0.6)
+
+### 🏡 Chore
+
+- Add changelogen for automated changelogs ([7cb82db](https://github.com/turf-sports/dslop/commit/7cb82db))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.0.5
 
 ### 🚀 Features
