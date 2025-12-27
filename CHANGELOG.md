@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.5.0
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.4.1...v1.5.0)
+
+### 🚀 Enhancements
+
+- Add AST-based duplicate detection ([f813c14](https://github.com/turf-sports/dslop/commit/f813c14))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.4.1
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.4.0...v1.4.1)
