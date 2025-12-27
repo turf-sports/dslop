@@ -6,7 +6,7 @@ Find duplicate code in your codebase.
 npx dslop
 ```
 
-By default, checks your branch changes (committed + uncommitted) against the codebase.
+By default, checks your branch changes against the codebase. If no changes found, automatically does a full scan.
 
 ## Install
 
@@ -17,17 +17,18 @@ npm i -g dslop
 ## Usage
 
 ```bash
-dslop                        # check your PR/branch for dupes
-dslop --all                  # scan entire codebase
-dslop ./src -m 6 -s 80       # 6 line min, 80% similarity  
-dslop --all --cross-package  # cross-package dupes (monorepos)
+dslop                        # check PR changes (or full scan if none)
+dslop ./apps/web             # scan apps/web (full if no changes there)
+dslop -c                     # changes only, exit if none found
+dslop --cross-package        # cross-package dupes (monorepos)
 ```
 
 ## Options
 
 | Flag | Description |
 |------|-------------|
-| `-a, --all` | scan entire codebase (default: uncommitted only) |
+| `-a, --all` | force full codebase scan |
+| `-c, --changes` | force changes-only mode (exit if no changes) |
 | `-m, --min-lines` | min lines per block (default: 4) |
 | `-s, --similarity` | similarity threshold 0-100 (default: 70) |
 | `-e, --extensions` | file extensions (default: ts,tsx,js,jsx) |
@@ -59,20 +60,17 @@ Sliding window over source files extracts overlapping blocks at sizes 4, 6, 9, 1
 
 Exact hash matches = exact duplicates. For similar (non-exact) matches, uses character-level similarity.
 
-### Changed-line filtering (default mode)
+### Smart defaults
 
-Parses `git diff` output to get exact line ranges of your changes. Only reports duplicates where your changed lines match code elsewhere in the codebase.
-
-### Declaration detection (`--all` mode)
-
-Regex-based extraction of types, interfaces, enums. Compares by name similarity (Levenshtein + word overlap) and content similarity.
+1. If you have branch changes → checks those against the codebase
+2. If no changes found → automatically scans the entire target path
+3. Use `-c` to force changes-only mode (useful in CI)
 
 ## Limitations
 
 - **TypeScript/JavaScript only for AST:** AST parsing uses Babel with TS/JSX plugins. Other languages fall back to text-based only.
 - **No cross-language:** Won't detect a Python function duplicated in TypeScript.
 - **Comments affect text matching:** Intentional tradeoff. Copy-pasted code often includes comments.
-- **Declaration detection is regex:** Can miss edge cases like multi-line generics or decorators.
 - **Minimum 4 lines:** Shorter duplicates ignored to reduce noise. Use `-m 2` for stricter.
 - **Memory:** Loads all blocks in memory. Very large codebases (>1M lines) may be slow.
 

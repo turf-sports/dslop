@@ -118,13 +118,15 @@ dslop - Detect Similar/Duplicate Lines Of Programming
 Usage:
   dslop [path] [options]
 
-By default, checks your branch changes (committed + uncommitted) against the codebase.
+By default, checks your branch changes against the codebase.
+If no changes are found, automatically scans the entire path.
 
 Arguments:
   path                  Directory to scan (default: current directory)
 
 Options:
-  -a, --all             Scan entire codebase (not just uncommitted changes)
+  -a, --all             Force full codebase scan
+  -c, --changes         Force changes-only mode (exit if no changes found)
   -m, --min-lines <n>   Minimum block size in lines (default: ${DEFAULT_MIN_LINES})
   -s, --similarity <n>  Minimum similarity threshold 0-100 (default: ${Math.round(DEFAULT_SIMILARITY * 100)})
   -e, --extensions <s>  File extensions to scan (default: ${DEFAULT_EXTENSIONS.join(",")})
@@ -136,10 +138,10 @@ Options:
   -v, --version         Show version
 
 Examples:
-  dslop                            Check your PR/branch changes for duplicates
-  dslop --all                      Scan entire codebase
-  dslop ./src -m 6 -s 80           Scan src with 6 line min, 80% similarity
-  dslop --all --cross-package      Cross-package duplicates in entire codebase
+  dslop                            Check your PR changes (or full scan if none)
+  dslop ./apps/web                 Scan apps/web (full scan if no changes there)
+  dslop -c                         Check PR changes only, exit if none
+  dslop --cross-package            Cross-package duplicates
 `);
 }
 
@@ -158,6 +160,7 @@ async function main() {
       normalize: { type: "boolean", default: true },
       "no-normalize": { type: "boolean", default: false },
       all: { type: "boolean", short: "a", default: false },
+      changes: { type: "boolean", short: "c", default: false },
       "cross-package": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
@@ -182,9 +185,11 @@ async function main() {
   const extensions = (values.extensions as string).split(",").map((e) => e.trim());
   const ignorePatterns = (values.ignore as string).split(",").map((p) => p.trim());
   const normalize = !values["no-normalize"];
-  const scanAll = values.all as boolean;
+  const forceAll = values.all as boolean;
+  const forceChanges = values.changes as boolean;
   const crossPackage = values["cross-package"] as boolean;
   const jsonOutput = values.json as boolean;
+  const hasExplicitPath = positionals.length > 0;
 
   if (minLines < 2) {
     console.error("Error: --min-lines must be at least 2");
@@ -202,34 +207,54 @@ async function main() {
     normalize,
   };
 
-  const changedLines = !scanAll ? getChangedLines(targetPath) : null;
-  
-  if (!scanAll && changedLines?.size === 0) {
-    console.log("\nNo changes found. Use --all to scan entire codebase.");
-    process.exit(0);
+  // Determine scan mode:
+  // 1. --all flag forces full scan
+  // 2. --changes flag forces changes-only mode
+  // 3. Otherwise, check for changes first - if none found, auto-switch to --all
+  let scanAll = forceAll;
+  let changedLines: ChangedFiles | null = null;
+
+  if (!forceAll) {
+    changedLines = getChangedLines(targetPath);
+    
+    if (changedLines.size === 0) {
+      if (forceChanges) {
+        console.log("\nNo changes found on current branch.");
+        process.exit(0);
+      }
+      // Auto-switch to full scan
+      scanAll = true;
+      if (!jsonOutput) {
+        console.log(`\nNo changes detected${hasExplicitPath ? ` in ${targetPath}` : ""}, defaulting to full scan...`);
+      }
+    }
   }
 
-  console.log(`\nScanning ${targetPath}...`);
-  if (!scanAll && changedLines) {
-    console.log(`  Mode: checking changed lines in ${changedLines.size} files`);
-  } else {
-    console.log(`  Mode: full codebase scan`);
+  if (!jsonOutput) {
+    console.log(`\nScanning ${targetPath}...`);
+    if (!scanAll && changedLines && changedLines.size > 0) {
+      console.log(`  Mode: checking changed lines in ${changedLines.size} files`);
+    } else {
+      console.log(`  Mode: full codebase scan`);
+    }
+    console.log(`  Extensions: ${extensions.join(", ")}`);
+    console.log(`  Min block size: ${minLines} lines`);
+    console.log(`  Similarity threshold: ${Math.round(similarity * 100)}%`);
+    if (crossPackage) {
+      console.log(`  Cross-package: enabled`);
+    }
+    console.log();
   }
-  console.log(`  Extensions: ${extensions.join(", ")}`);
-  console.log(`  Min block size: ${minLines} lines`);
-  console.log(`  Similarity threshold: ${Math.round(similarity * 100)}%`);
-  if (crossPackage) {
-    console.log(`  Cross-package: enabled`);
-  }
-  console.log();
 
   try {
     const startTime = performance.now();
     const { blocks, declarations, astBlocks, fileCount, totalLines } = await scanDirectory(targetPath, scanOptions, true);
     const scanTime = performance.now() - startTime;
 
-    console.log(`Scanned ${fileCount} files (${totalLines.toLocaleString()} lines) in ${Math.round(scanTime)}ms`);
-    console.log(`Extracted ${blocks.length.toLocaleString()} blocks, ${astBlocks.length.toLocaleString()} functions/classes\n`);
+    if (!jsonOutput) {
+      console.log(`Scanned ${fileCount} files (${totalLines.toLocaleString()} lines) in ${Math.round(scanTime)}ms`);
+      console.log(`Extracted ${blocks.length.toLocaleString()} blocks, ${astBlocks.length.toLocaleString()} functions/classes\n`);
+    }
 
     if (blocks.length === 0 && astBlocks.length === 0) {
       console.log("No code found to analyze.");
