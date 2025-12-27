@@ -10,7 +10,8 @@ import {
   DEFAULT_IGNORE_PATTERNS,
 } from "./src/constants";
 import { findDuplicates, findDeclarationDuplicates } from "./src/detector";
-import { formatOutput, formatStats, formatDeclarations } from "./src/formatter";
+import { findASTDuplicates } from "./src/ast";
+import { formatOutput, formatStats, formatDeclarations, formatASTDuplicates } from "./src/formatter";
 import { scanDirectory, type ScanOptions } from "./src/scanner";
 
 const VERSION = process.env.npm_package_version || "__INJECT_VERSION__";
@@ -225,24 +226,20 @@ async function main() {
 
   try {
     const startTime = performance.now();
-    // Only extract declarations in --all mode (faster default mode)
-    const { blocks, declarations, fileCount, totalLines } = await scanDirectory(targetPath, scanOptions, scanAll);
+    const { blocks, declarations, astBlocks, fileCount, totalLines } = await scanDirectory(targetPath, scanOptions, true);
     const scanTime = performance.now() - startTime;
 
     console.log(`Scanned ${fileCount} files (${totalLines.toLocaleString()} lines) in ${Math.round(scanTime)}ms`);
-    if (declarations.length > 0) {
-      console.log(`Extracted ${blocks.length.toLocaleString()} code blocks, ${declarations.length.toLocaleString()} declarations\n`);
-    } else {
-      console.log(`Extracted ${blocks.length.toLocaleString()} code blocks\n`);
-    }
+    console.log(`Extracted ${blocks.length.toLocaleString()} blocks, ${astBlocks.length.toLocaleString()} functions/classes\n`);
 
-    if (blocks.length === 0 && declarations.length === 0) {
+    if (blocks.length === 0 && astBlocks.length === 0) {
       console.log("No code found to analyze.");
       process.exit(0);
     }
 
     const detectStart = performance.now();
     let duplicates = findDuplicates(blocks, similarity, targetPath);
+    let astDuplicates = findASTDuplicates(astBlocks, similarity);
     let declDuplicates = findDeclarationDuplicates(declarations, similarity);
     const detectTime = performance.now() - detectStart;
 
@@ -266,6 +263,16 @@ async function main() {
         return inOtherFiles || inSameFileOutsideChanges;
       });
 
+      astDuplicates = astDuplicates.filter((group) => {
+        const inChanged = group.matches.filter((m) => 
+          isInChangedLines(m.filePath, m.startLine, m.endLine, changedLines)
+        );
+        const notInChanged = group.matches.filter((m) => 
+          !isInChangedLines(m.filePath, m.startLine, m.endLine, changedLines)
+        );
+        return inChanged.length > 0 && notInChanged.length > 0;
+      });
+
       declDuplicates = declDuplicates.filter((group) => {
         const inChanged = group.matches.filter((m) => 
           isInChangedLines(m.filePath, m.startLine, m.endLine, changedLines)
@@ -278,31 +285,27 @@ async function main() {
     }
 
     if (crossPackage) {
-      duplicates = duplicates.filter((group) => {
-        const packages = new Set(
-          group.matches.map((m) => {
-            const match = m.filePath.match(/(?:apps|packages|libs)\/([^\/]+)/);
-            return match ? match[1] : m.filePath.split("/")[0];
-          })
-        );
-        return packages.size > 1;
-      });
+      const filterCrossPackage = <T extends { matches: Array<{ filePath: string }> }>(groups: T[]): T[] => {
+        return groups.filter((group) => {
+          const packages = new Set(
+            group.matches.map((m) => {
+              const match = m.filePath.match(/(?:apps|packages|libs)\/([^\/]+)/);
+              return match ? match[1] : m.filePath.split("/")[0];
+            })
+          );
+          return packages.size > 1;
+        });
+      };
       
-      declDuplicates = declDuplicates.filter((group) => {
-        const packages = new Set(
-          group.matches.map((m) => {
-            const match = m.filePath.match(/(?:apps|packages|libs)\/([^\/]+)/);
-            return match ? match[1] : m.filePath.split("/")[0];
-          })
-        );
-        return packages.size > 1;
-      });
+      duplicates = filterCrossPackage(duplicates);
+      astDuplicates = filterCrossPackage(astDuplicates);
+      declDuplicates = filterCrossPackage(declDuplicates);
     }
 
-    const totalGroups = duplicates.length + declDuplicates.length;
+    const totalGroups = duplicates.length + astDuplicates.length + declDuplicates.length;
     console.log(`Found ${totalGroups} duplicate groups in ${Math.round(detectTime)}ms`);
-    if (declDuplicates.length > 0) {
-      console.log(`  (${duplicates.length} code blocks, ${declDuplicates.length} declarations)\n`);
+    if (astDuplicates.length > 0 || declDuplicates.length > 0) {
+      console.log(`  (${duplicates.length} blocks, ${astDuplicates.length} AST, ${declDuplicates.length} declarations)\n`);
     } else {
       console.log();
     }
@@ -319,8 +322,11 @@ async function main() {
     }
 
     if (jsonOutput) {
-      console.log(JSON.stringify({ duplicates, declarations: declDuplicates }, null, 2));
+      console.log(JSON.stringify({ duplicates, ast: astDuplicates, declarations: declDuplicates }, null, 2));
     } else {
+      if (astDuplicates.length > 0) {
+        console.log(formatASTDuplicates(astDuplicates, targetPath));
+      }
       if (duplicates.length > 0) {
         console.log(formatOutput(duplicates, targetPath));
         console.log(formatStats(duplicates));

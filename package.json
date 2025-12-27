@@ -3,9 +3,9 @@
   "version": "1.4.1",
   "description": "Detect Similar/Duplicate Lines Of Programming - Find code duplication in your codebase",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
   "bin": {
-    "dslop": "./dist/index.js"
+    "dslop": "./dist/index.cjs"
   },
   "files": [
     "dist",
@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "bun run --watch index.ts",
     "start": "bun run index.ts",
-    "build": "bun build ./index.ts --outdir ./dist --target node --format esm && VERSION=$(node -p \"require('./package.json').version\") && sed -i '' '1,3d' ./dist/index.js && sed -i '' \"s/__INJECT_VERSION__/$VERSION/g\" ./dist/index.js && echo '#!/usr/bin/env node\n' | cat - ./dist/index.js > temp && mv temp ./dist/index.js && chmod +x ./dist/index.js",
+    "build": "esbuild index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs && sed -i '' '1d' ./dist/index.cjs && VERSION=$(node -p \"require('./package.json').version\") && sed -i '' \"s/__INJECT_VERSION__/$VERSION/g\" ./dist/index.cjs && echo '#!/usr/bin/env node' | cat - ./dist/index.cjs > temp && mv temp ./dist/index.cjs && chmod +x ./dist/index.cjs",
     "build:binary": "bun build --compile ./index.ts --outfile dslop",
     "prepublishOnly": "bun run build",
     "changelog": "bunx changelogen --output CHANGELOG.md",
@@ -45,12 +45,16 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "changelogen": "^0.6.2"
+    "changelogen": "^0.6.2",
+    "esbuild": "^0.27.2"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
+    "@babel/parser": "^7.28.5",
+    "@babel/traverse": "^7.28.5",
+    "@babel/types": "^7.28.5",
     "glob": "^13.0.0"
   }
 }

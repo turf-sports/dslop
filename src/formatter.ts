@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { DuplicateGroup, DeclarationDuplicate } from "./detector";
+import type { ASTDuplicateGroup } from "./ast";
 import {
   MAX_PATH_DISPLAY_LENGTH,
   MAX_MATCHES_IN_SUMMARY,
@@ -295,6 +296,72 @@ export function formatDeclarations(groups: DeclarationDuplicate[], basePath: str
   
   const totalDups = groups.reduce((sum, g) => sum + g.matches.length, 0);
   lines.push(`${bold}Declaration Summary${reset}`);
+  lines.push(`  Duplicate groups: ${bold}${groups.length}${reset}`);
+  lines.push(`  Total occurrences: ${bold}${totalDups}${reset}`);
+  lines.push(SECTION_SEPARATOR);
+
+  return lines.join("\n");
+}
+
+const AST_TYPE_LABELS: Record<string, string> = {
+  function: "Function",
+  arrow: "Arrow Function",
+  class: "Class",
+  type: "Type",
+  interface: "Interface",
+};
+
+export function formatASTDuplicates(groups: ASTDuplicateGroup[], basePath: string): string {
+  if (groups.length === 0) return "";
+
+  const lines: string[] = [];
+  
+  lines.push("");
+  lines.push(SECTION_SEPARATOR);
+  lines.push(`${bold}DUPLICATE FUNCTIONS (AST-based)${reset}`);
+  lines.push(SECTION_SEPARATOR);
+  lines.push("");
+  lines.push(`${dim}These functions have identical structure (ignoring variable names)${reset}`);
+  lines.push("");
+
+  for (let i = 0; i < Math.min(groups.length, 20); i++) {
+    const group = groups[i]!;
+    const typeLabel = AST_TYPE_LABELS[group.type] || group.type;
+    
+    lines.push(`${bold}${typeLabel} ${i + 1}${reset} │ ${red}${bold}IDENTICAL${reset} │ ${group.matches.length} occurrences`);
+    lines.push("");
+
+    for (const match of group.matches.slice(0, 5)) {
+      const displayPath = truncatePath(match.filePath, basePath);
+      const exportBadge = match.exported ? `${green}exported${reset}` : `${gray}local${reset}`;
+      lines.push(`  ${dim}├─${reset} ${cyan}${match.name}${reset} [${exportBadge}]`);
+      lines.push(`     ${displayPath}:${yellow}${match.startLine}${reset}-${yellow}${match.endLine}${reset}`);
+    }
+
+    if (group.matches.length > 5) {
+      lines.push(`  ${dim}└─${reset} ${gray}... and ${group.matches.length - 5} more${reset}`);
+    }
+
+    const exported = group.matches.find(m => m.exported);
+    if (exported) {
+      lines.push("");
+      lines.push(`  ${magenta}→${reset} Import \`${exported.name}\` from \`${truncatePath(exported.filePath, basePath)}\``);
+    } else {
+      lines.push("");
+      lines.push(`  ${magenta}→${reset} Extract to shared module`);
+    }
+
+    lines.push("");
+  }
+
+  if (groups.length > 20) {
+    lines.push(`${dim}... and ${groups.length - 20} more duplicate functions${reset}`);
+    lines.push("");
+  }
+
+  lines.push(SECTION_SEPARATOR);
+  const totalDups = groups.reduce((sum, g) => sum + g.matches.length, 0);
+  lines.push(`${bold}AST Summary${reset}`);
   lines.push(`  Duplicate groups: ${bold}${groups.length}${reset}`);
   lines.push(`  Total occurrences: ${bold}${totalDups}${reset}`);
   lines.push(SECTION_SEPARATOR);

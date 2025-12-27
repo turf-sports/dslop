@@ -3,6 +3,7 @@ import path from "node:path";
 import { readFile, stat } from "node:fs/promises";
 import { normalizeCode } from "./normalizer";
 import { extractDeclarations, type Declaration, type DeclarationType } from "./declarations";
+import { extractASTBlocks, type ASTBlock } from "./ast";
 import {
   MAX_BLOCK_SIZE,
   BLOCK_SIZE_MULTIPLIER,
@@ -25,7 +26,7 @@ export interface CodeBlock {
   exported?: boolean;
 }
 
-export type { Declaration, DeclarationType };
+export type { Declaration, DeclarationType, ASTBlock };
 
 export interface ScanOptions {
   extensions: string[];
@@ -37,6 +38,7 @@ export interface ScanOptions {
 export interface ScanResult {
   blocks: CodeBlock[];
   declarations: Declaration[];
+  astBlocks: ASTBlock[];
   fileCount: number;
   totalLines: number;
 }
@@ -132,13 +134,14 @@ function shouldIgnore(filePath: string, ignorePatterns: string[]): boolean {
 export async function scanDirectory(
   targetPath: string,
   options: ScanOptions,
-  enableDeclarations = true
+  enableAST = true
 ): Promise<ScanResult> {
   const { extensions, ignorePatterns, minLines, normalize } = options;
 
   const absolutePath = path.resolve(targetPath);
   const blocks: CodeBlock[] = [];
   const declarations: Declaration[] = [];
+  const astBlocks: ASTBlock[] = [];
   let fileCount = 0;
   let totalLines = 0;
 
@@ -153,7 +156,7 @@ export async function scanDirectory(
     ignore: ignorePatterns.map(p => `**/${p}/**`),
   });
 
-  const isTypeScript = enableDeclarations && extensions.some(ext => ext === "ts" || ext === "tsx");
+  const isTypeScript = extensions.some(ext => ext === "ts" || ext === "tsx");
 
   for (const filePath of files) {
     if (shouldIgnore(filePath, ignorePatterns)) {
@@ -181,7 +184,10 @@ export async function scanDirectory(
       );
       blocks.push(...fileBlocks);
 
-      if (isTypeScript && (filePath.endsWith(".ts") || filePath.endsWith(".tsx"))) {
+      if (enableAST && isTypeScript && (filePath.endsWith(".ts") || filePath.endsWith(".tsx"))) {
+        const fileAST = extractASTBlocks(content, filePath);
+        astBlocks.push(...fileAST);
+        
         const fileDeclarations = extractDeclarations(content, filePath);
         declarations.push(...fileDeclarations);
       }
@@ -190,5 +196,5 @@ export async function scanDirectory(
     }
   }
 
-  return { blocks, declarations, fileCount, totalLines };
+  return { blocks, declarations, astBlocks, fileCount, totalLines };
 }
