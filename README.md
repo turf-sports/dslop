@@ -36,26 +36,42 @@ dslop --all --cross-package  # cross-package dupes (monorepos)
 
 ## How it works
 
-**Block extraction:** Sliding window over source files. Extracts overlapping blocks at sizes 4, 6, 9, 13... lines. For blocks <10 lines, step=1 (every line). Larger blocks use step=blockSize/2.
+dslop uses two detection methods in parallel:
 
-**Normalization:** Before hashing, code is normalized:
+### 1. AST-based detection (functions/classes)
+
+Parses TypeScript/JavaScript with Babel to extract functions and classes. Normalizes the AST by replacing all identifiers with generic placeholders (`$0`, `$1`, etc.), preserving only the code structure.
+
+**This catches:**
+- Functions with identical logic but different variable names
+- Renamed copies of existing functions
+- Structurally identical classes
+
+Example: `calculateSum(numbers)` and `computeTotal(items)` with the same loop structure will match.
+
+### 2. Text-based detection (code blocks)
+
+Sliding window over source files extracts overlapping blocks at sizes 4, 6, 9, 13... lines. Before hashing, code is normalized:
 - String literals → `"<STRING>"`
 - Numbers → `<NUMBER>`
 - Whitespace collapsed
 - Comments preserved (intentional - comments often indicate copy-paste)
 
-**Matching:** Normalized blocks are hashed. Exact hash matches = exact duplicates. For similar (non-exact) matches, uses character-level similarity on a sample of blocks per hash bucket.
+Exact hash matches = exact duplicates. For similar (non-exact) matches, uses character-level similarity.
 
-**Declaration detection** (`--all` mode): Regex-based extraction of types, interfaces, functions, classes. Compares by name similarity (Levenshtein + word overlap) and content similarity.
+### Changed-line filtering (default mode)
 
-**Changed-line filtering** (default mode): Parses `git diff` output to get exact line ranges. Only reports duplicates where your changed lines match code elsewhere.
+Parses `git diff` output to get exact line ranges of your changes. Only reports duplicates where your changed lines match code elsewhere in the codebase.
+
+### Declaration detection (`--all` mode)
+
+Regex-based extraction of types, interfaces, enums. Compares by name similarity (Levenshtein + word overlap) and content similarity.
 
 ## Limitations
 
-- **Text-based, not AST:** Doesn't understand code structure. A reformatted function won't match the original. Two semantically identical functions with different variable names won't match.
-- **TypeScript/JavaScript focused:** Default extensions are ts/tsx/js/jsx. Works on any text but tuned for JS-like syntax.
+- **TypeScript/JavaScript only for AST:** AST parsing uses Babel with TS/JSX plugins. Other languages fall back to text-based only.
 - **No cross-language:** Won't detect a Python function duplicated in TypeScript.
-- **Comments affect matching:** Intentional tradeoff. Copy-pasted code often includes comments.
+- **Comments affect text matching:** Intentional tradeoff. Copy-pasted code often includes comments.
 - **Declaration detection is regex:** Can miss edge cases like multi-line generics or decorators.
 - **Minimum 4 lines:** Shorter duplicates ignored to reduce noise. Use `-m 2` for stricter.
 - **Memory:** Loads all blocks in memory. Very large codebases (>1M lines) may be slow.
