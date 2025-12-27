@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.5.1
+
+[compare changes](https://github.com/turf-sports/dslop/compare/v1.5.0...v1.5.1)
+
+### 🩹 Fixes
+
+- Resolve all lint errors ([0de0b6c](https://github.com/turf-sports/dslop/commit/0de0b6c))
+
+### ❤️ Contributors
+
+- Siddharth Sharma <sharmasiddharthcs@gmail.com>
+
 ## v1.5.0
 
 [compare changes](https://github.com/turf-sports/dslop/compare/v1.4.1...v1.5.0)
