@@ -1,0 +1,56 @@
+{
+  "name": "dslop",
+  "version": "1.0.6",
+  "description": "Detect Similar/Duplicate Lines Of Programming - Find code duplication in your codebase",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "dslop": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "dev": "bun run --watch index.ts",
+    "start": "bun run index.ts",
+    "build": "bun build ./index.ts --outdir ./dist --target node --format esm && VERSION=$(node -p \"require('./package.json').version\") && sed -i '' '1,3d' ./dist/index.js && sed -i '' \"s/__INJECT_VERSION__/$VERSION/g\" ./dist/index.js && echo '#!/usr/bin/env node\n' | cat - ./dist/index.js > temp && mv temp ./dist/index.js && chmod +x ./dist/index.js",
+    "build:binary": "bun build --compile ./index.ts --outfile dslop",
+    "prepublishOnly": "bun run build",
+    "changelog": "bunx changelogen --output CHANGELOG.md",
+    "release": "bunx changelogen --release --push && npm publish",
+    "release:minor": "bunx changelogen --release --minor --push && npm publish",
+    "release:major": "bunx changelogen --release --major --push && npm publish"
+  },
+  "keywords": [
+    "duplicate",
+    "code",
+    "detection",
+    "cli",
+    "lint",
+    "copy-paste",
+    "refactor",
+    "monorepo",
+    "dry"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/turf-sports/dslop.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "changelogen": "^0.6.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "glob": "^13.0.0"
+  }
+}
