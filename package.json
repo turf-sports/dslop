@@ -1,0 +1,49 @@
+{
+  "name": "dslop",
+  "version": "1.0.0",
+  "description": "Detect Similar/Duplicate Lines Of Programming - Find code duplication in your codebase",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "dslop": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "bun run --watch index.ts",
+    "start": "bun run index.ts",
+    "build": "bun build ./index.ts --outdir ./dist --target node --format esm && sed -i '' '1,3d' ./dist/index.js && echo '#!/usr/bin/env node\n' | cat - ./dist/index.js > temp && mv temp ./dist/index.js && chmod +x ./dist/index.js",
+    "build:binary": "bun build --compile ./index.ts --outfile dslop",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "duplicate",
+    "code",
+    "detection",
+    "cli",
+    "lint",
+    "copy-paste",
+    "refactor",
+    "monorepo",
+    "dry"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "glob": "^13.0.0"
+  }
+}
