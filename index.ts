@@ -327,15 +327,20 @@ async function main() {
     }
 
     const totalGroups = duplicates.length + astDuplicates.length + declDuplicates.length;
-    console.log(`Found ${totalGroups} duplicate groups in ${Math.round(detectTime)}ms`);
-    if (astDuplicates.length > 0 || declDuplicates.length > 0) {
-      console.log(`  (${duplicates.length} blocks, ${astDuplicates.length} AST, ${declDuplicates.length} declarations)\n`);
-    } else {
-      console.log();
+    
+    if (!jsonOutput) {
+      console.log(`Found ${totalGroups} duplicate groups in ${Math.round(detectTime)}ms`);
+      if (astDuplicates.length > 0 || declDuplicates.length > 0) {
+        console.log(`  (${duplicates.length} blocks, ${astDuplicates.length} AST, ${declDuplicates.length} declarations)\n`);
+      } else {
+        console.log();
+      }
     }
 
     if (totalGroups === 0) {
-      if (!scanAll) {
+      if (jsonOutput) {
+        console.log(JSON.stringify({ duplicates: [], ast: [], declarations: [] }, null, 2));
+      } else if (!scanAll) {
         console.log("No duplicates in your changes. You're good!");
       } else if (crossPackage) {
         console.log("No cross-package duplicates found!");
