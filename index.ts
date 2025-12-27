@@ -28,28 +28,21 @@ function getChangedFiles(targetPath: string): Set<string> {
   };
 
   try {
-    // Uncommitted: staged
     addFiles(execSync("git diff --cached --name-only", { cwd: absolutePath, encoding: "utf-8" }));
-    // Uncommitted: unstaged  
     addFiles(execSync("git diff --name-only", { cwd: absolutePath, encoding: "utf-8" }));
-    // Uncommitted: untracked
     addFiles(execSync("git ls-files --others --exclude-standard", { cwd: absolutePath, encoding: "utf-8" }));
     
-    // Committed: changes on current branch vs main/master
     try {
       const baseBranch = execSync("git rev-parse --abbrev-ref origin/HEAD 2>/dev/null || echo origin/main", { cwd: absolutePath, encoding: "utf-8" }).trim().replace("origin/", "");
       const currentBranch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: absolutePath, encoding: "utf-8" }).trim();
       
       if (currentBranch !== baseBranch) {
-        // Get files changed in commits on this branch
         const mergeBase = execSync(`git merge-base ${baseBranch} HEAD 2>/dev/null || echo ""`, { cwd: absolutePath, encoding: "utf-8" }).trim();
         if (mergeBase) {
           addFiles(execSync(`git diff --name-only ${mergeBase}...HEAD`, { cwd: absolutePath, encoding: "utf-8" }));
         }
       }
-    } catch {
-      // Not on a branch or can't find base, just use uncommitted
-    }
+    } catch {}
     
     return files;
   } catch {
