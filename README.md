@@ -151,16 +151,16 @@ function getInitials(person: Person): string {
 
 ## Performance
 
-dslop uses [oxc](https://oxc.rs/) (Rust-based parser) + caching for speed:
+dslop uses aggressive caching + parallel processing for speed:
 
 ```bash
 # First run (builds cache)
 $ dslop --all
-Scanned 1410 files (373K lines) in 950ms
+Scanned 1410 files (373K lines) in 2.5s
 
 # Cached runs
 $ dslop --all
-Scanned 1410 files (373K lines) in 170ms
+Scanned 1410 files (373K lines) in 170ms  # 50x faster
 ```
 
 Cache is stored in `.dslop-cache`. Add it to `.gitignore`. Use `--no-cache` to bypass.

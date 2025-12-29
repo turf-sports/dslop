@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "bun run --watch index.ts",
     "start": "bun run index.ts",
-    "build": "esbuild index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs --external:oxc-parser && sed -i '' '1d' ./dist/index.cjs && VERSION=$(node -p \"require('./package.json').version\") && sed -i '' \"s/__INJECT_VERSION__/$VERSION/g\" ./dist/index.cjs && echo '#!/usr/bin/env node' | cat - ./dist/index.cjs > temp && mv temp ./dist/index.cjs && chmod +x ./dist/index.cjs",
+    "build": "esbuild index.ts --bundle --platform=node --format=cjs --outfile=dist/index.cjs && sed -i '' '1d' ./dist/index.cjs && VERSION=$(node -p \"require('./package.json').version\") && sed -i '' \"s/__INJECT_VERSION__/$VERSION/g\" ./dist/index.cjs && echo '#!/usr/bin/env node' | cat - ./dist/index.cjs > temp && mv temp ./dist/index.cjs && chmod +x ./dist/index.cjs",
     "build:binary": "bun build --compile ./index.ts --outfile dslop",
     "prepublishOnly": "bun run build",
     "changelog": "bunx changelogen --output CHANGELOG.md",
@@ -44,7 +44,7 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "@oxc-project/types": "^0.105.0",
+    "@types/babel__traverse": "^7.28.0",
     "@types/bun": "latest",
     "changelogen": "^0.6.2",
     "esbuild": "^0.27.2"
@@ -53,7 +53,9 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "glob": "^13.0.0",
-    "oxc-parser": "^0.105.0"
+    "@babel/parser": "^7.28.5",
+    "@babel/traverse": "^7.28.5",
+    "@babel/types": "^7.28.5",
+    "glob": "^13.0.0"
   }
 }
